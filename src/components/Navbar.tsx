@@ -47,9 +47,7 @@ export default function Navbar() {
           {connected && (
             <NavLink href="/history" icon={<ClockCounterClockwise size={18} />} label="History" />
           )}
-          <div className="hidden sm:block">
-            <NavLink href="/explore" icon={<Compass size={18} />} label="Explore" />
-          </div>
+          <NavLink href="/explore" icon={<Compass size={18} />} label="Explore" />
         </div>
 
         <div className="flex items-center gap-3">

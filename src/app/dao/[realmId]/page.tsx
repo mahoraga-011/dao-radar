@@ -12,10 +12,10 @@ import {
   type Realm,
   ProposalState,
 } from "@/lib/governance";
-import { shortenAddress, timeAgo } from "@/lib/utils";
+import { shortenAddress, timeAgo, safeToNumber } from "@/lib/utils";
 import StatusBadge from "@/components/StatusBadge";
 import { SkeletonProposalList } from "@/components/Skeleton";
-import { ArrowLeft, FileText, Funnel } from "@phosphor-icons/react";
+import { ArrowLeft, FileText, Funnel, Warning } from "@phosphor-icons/react";
 
 type FilterType = "all" | "active" | "completed" | "defeated";
 
@@ -26,6 +26,7 @@ export default function DAODetailPage() {
   const [realm, setRealm] = useState<ProgramAccount<Realm> | null>(null);
   const [proposals, setProposals] = useState<ProposalInfo[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [filter, setFilter] = useState<FilterType>("all");
 
   useEffect(() => {
@@ -33,8 +34,18 @@ export default function DAODetailPage() {
 
     async function load() {
       setLoading(true);
+      setError(null);
       try {
-        const realmPubkey = new PublicKey(realmId);
+        let realmPubkey: PublicKey;
+        try {
+          realmPubkey = new PublicKey(realmId);
+        } catch {
+          if (!cancelled) {
+            setError("Invalid DAO address");
+            setLoading(false);
+          }
+          return;
+        }
         const [realmData, proposalData] = await Promise.all([
           getRealmInfo(realmPubkey),
           getRealmProposals(realmPubkey),
@@ -45,6 +56,7 @@ export default function DAODetailPage() {
         }
       } catch (err) {
         console.error("Failed to load DAO:", err);
+        if (!cancelled) setError("Failed to load DAO. Please try again.");
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -76,6 +88,22 @@ export default function DAODetailPage() {
           <div className="skeleton h-4 w-64" />
         </div>
         <SkeletonProposalList count={5} />
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="flex flex-col items-center justify-center py-24">
+        <Warning size={48} className="mb-4 text-red-400" />
+        <p className="text-lg font-medium">Something went wrong</p>
+        <p className="text-sm text-muted mt-2">{error}</p>
+        <button
+          onClick={() => window.location.reload()}
+          className="mt-4 rounded-lg bg-accent px-4 py-2 text-sm font-medium text-white hover:bg-accent-hover transition-colors"
+        >
+          Try Again
+        </button>
       </div>
     );
   }
@@ -143,7 +171,7 @@ export default function DAODetailPage() {
 
 function ProposalRow({ proposal, realmId }: { proposal: ProposalInfo; realmId: string }) {
   const p = proposal.proposal;
-  const timestamp = p.votingAt?.toNumber() || p.draftAt.toNumber();
+  const timestamp = p.votingAt ? safeToNumber(p.votingAt) : safeToNumber(p.draftAt);
 
   return (
     <Link href={`/proposal/${proposal.pubkey.toBase58()}?realm=${realmId}`}>
@@ -167,8 +195,9 @@ function ProposalRow({ proposal, realmId }: { proposal: ProposalInfo; realmId: s
 }
 
 function VoteBar({ proposal }: { proposal: import("@solana/spl-governance").Proposal }) {
-  const yes = proposal.options?.[0]?.voteWeight?.toNumber() || 0;
-  const no = proposal.denyVoteWeight?.toNumber() || 0;
+  // TODO: fetch actual token decimals
+  const yes = proposal.options?.[0]?.voteWeight ? safeToNumber(proposal.options[0].voteWeight) : 0;
+  const no = proposal.denyVoteWeight ? safeToNumber(proposal.denyVoteWeight) : 0;
   const total = yes + no;
   const yesPercent = total > 0 ? (yes / total) * 100 : 50;
 

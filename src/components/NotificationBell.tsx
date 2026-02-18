@@ -4,15 +4,15 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import { useWallet } from "@solana/wallet-adapter-react";
 import Link from "next/link";
 import { Bell, Lightning, X } from "@phosphor-icons/react";
-import { getUserDAOs } from "@/lib/governance";
+import { FEATURED_REALMS } from "@/lib/governance";
 import { ProposalState } from "@solana/spl-governance";
 import {
   requestNotificationPermission,
   notifyNewProposals,
   type ActiveProposalAlert,
 } from "@/lib/notifications";
-import { getAllProposals } from "@solana/spl-governance";
-import { getConnection, SPL_GOV_PROGRAM_ID } from "@/lib/governance";
+import { getAllProposals, getTokenOwnerRecordsByOwner } from "@solana/spl-governance";
+import { getConnection, SPL_GOV_PROGRAM_ID, getRealmInfo } from "@/lib/governance";
 
 interface ProposalNotif {
   proposalId: string;
@@ -37,37 +37,52 @@ export default function NotificationBell() {
 
     setLoading(true);
     try {
-      const daos = await getUserDAOs(publicKey);
+      const connection = getConnection();
+
+      // Get realm pubkeys from user's token owner records
+      const tokenOwnerRecords = await getTokenOwnerRecordsByOwner(
+        connection,
+        SPL_GOV_PROGRAM_ID,
+        publicKey
+      );
+      const userRealmPks = [...new Set(tokenOwnerRecords.map((t) => t.account.realm.toBase58()))];
+
+      // Fall back to featured realms if user has no DAOs
+      const realmPks = userRealmPks.length > 0
+        ? userRealmPks
+        : FEATURED_REALMS.map((r) => r.pubkey);
+
       const allActive: ProposalNotif[] = [];
       const alertBatch: ActiveProposalAlert[] = [];
 
-      for (const dao of daos) {
-        try {
-          const connection = getConnection();
-          const proposals = await getAllProposals(
-            connection,
-            SPL_GOV_PROGRAM_ID,
-            dao.realmPubkey
-          );
+      await Promise.allSettled(
+        realmPks.map(async (realmPk) => {
+          try {
+            const realmPubkey = new (await import("@solana/web3.js")).PublicKey(realmPk);
+            const [realm, proposals] = await Promise.all([
+              getRealmInfo(realmPubkey),
+              getAllProposals(connection, SPL_GOV_PROGRAM_ID, realmPubkey),
+            ]);
 
-          for (const batch of proposals) {
-            for (const p of batch) {
-              if (p.account.state === ProposalState.Voting) {
-                const item = {
-                  proposalId: p.pubkey.toBase58(),
-                  proposalName: p.account.name,
-                  daoName: dao.realm.account.name,
-                  realmId: dao.realmPubkey.toBase58(),
-                };
-                allActive.push({ ...item, isNew: false });
-                alertBatch.push(item);
+            for (const batch of proposals) {
+              for (const p of batch) {
+                if (p.account.state === ProposalState.Voting) {
+                  const item = {
+                    proposalId: p.pubkey.toBase58(),
+                    proposalName: p.account.name,
+                    daoName: realm.account.name,
+                    realmId: realmPk,
+                  };
+                  allActive.push({ ...item, isNew: false });
+                  alertBatch.push(item);
+                }
               }
             }
+          } catch {
+            // Skip failed DAOs
           }
-        } catch {
-          // Skip failed DAOs
-        }
-      }
+        })
+      );
 
       // Check which are new and send browser notifications
       const newOnes = notifyNewProposals(alertBatch);
@@ -96,7 +111,7 @@ export default function NotificationBell() {
     }
   }, [connected, publicKey, fetchNotifications]);
 
-  // Poll every 5 minutes
+  // Poll once per day (proposals last days/weeks, no need for frequent polling)
   useEffect(() => {
     if (!connected) return;
     const interval = setInterval(fetchNotifications, 24 * 60 * 60 * 1000);

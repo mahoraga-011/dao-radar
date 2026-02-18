@@ -19,10 +19,11 @@ import {
   type TokenOwnerRecord,
 } from "@/lib/governance";
 import { summarizeProposal } from "@/lib/ai-summary";
-import { shortenAddress, timeAgo, formatNumber } from "@/lib/utils";
+import { shortenAddress, timeAgo, formatNumber, safeToNumber } from "@/lib/utils";
 import StatusBadge from "@/components/StatusBadge";
 import LoadingSpinner from "@/components/LoadingSpinner";
 import Markdown from "react-markdown";
+import rehypeSanitize from "rehype-sanitize";
 import {
   ArrowLeft,
   ThumbsUp,
@@ -60,7 +61,14 @@ export default function ProposalDetailPage() {
       setLoading(true);
       setError(null);
       try {
-        const proposalPubkey = new PublicKey(proposalId);
+        let proposalPubkey: PublicKey;
+        try {
+          proposalPubkey = new PublicKey(proposalId);
+        } catch {
+          setError("Invalid proposal address");
+          setLoading(false);
+          return;
+        }
         const proposalData = await getProposalDetail(proposalPubkey);
         if (cancelled) return;
         setProposal(proposalData);
@@ -98,10 +106,11 @@ export default function ProposalDetailPage() {
 
       setNoVotingPower(false);
       try {
-        const communityMint = realm.account.communityMint;
+        // Use the proposal's governing token mint (supports both community and council mints)
+        const mint = proposal ? proposal.account.governingTokenMint : realm.account.communityMint;
         const record = await getVoterTokenOwnerRecord(
           new PublicKey(realmId),
-          communityMint,
+          mint,
           publicKey
         );
         if (!cancelled) {
@@ -118,7 +127,7 @@ export default function ProposalDetailPage() {
 
     loadVoterRecord();
     return () => { cancelled = true; };
-  }, [publicKey, realmId, realm]);
+  }, [publicKey, realmId, realm, proposal]);
 
   const generateSummary = useCallback(async () => {
     if (!proposal) return;
@@ -154,7 +163,7 @@ export default function ProposalDetailPage() {
         proposalOwnerRecord: p.tokenOwnerRecord,
         voterTokenOwnerRecord: voterRecord.pubkey,
         governanceAuthority: publicKey,
-        governingTokenMint: realm.account.communityMint,
+        governingTokenMint: p.governingTokenMint,
         payer: publicKey,
         voteType,
       });
@@ -213,13 +222,14 @@ export default function ProposalDetailPage() {
   }
 
   const p = proposal.account;
-  const yesVotes = p.options?.[0]?.voteWeight?.toNumber() || 0;
-  const noVotes = p.denyVoteWeight?.toNumber() || 0;
-  const abstainVotes = p.abstainVoteWeight?.toNumber() || 0;
+  // TODO: fetch actual token decimals — most major Solana governance tokens use 6 decimals
+  const yesVotes = p.options?.[0]?.voteWeight ? safeToNumber(p.options[0].voteWeight) : 0;
+  const noVotes = p.denyVoteWeight ? safeToNumber(p.denyVoteWeight) : 0;
+  const abstainVotes = p.abstainVoteWeight ? safeToNumber(p.abstainVoteWeight) : 0;
   const totalVotes = yesVotes + noVotes + abstainVotes;
   const yesPercent = totalVotes > 0 ? (yesVotes / totalVotes) * 100 : 0;
   const noPercent = totalVotes > 0 ? (noVotes / totalVotes) * 100 : 0;
-  const timestamp = p.votingAt?.toNumber() || p.draftAt.toNumber();
+  const timestamp = p.votingAt ? safeToNumber(p.votingAt) : safeToNumber(p.draftAt);
   const isActive = p.state === ProposalState.Voting;
 
   return (
@@ -245,10 +255,10 @@ export default function ProposalDetailPage() {
         <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted">
           <span>Proposer: {shortenAddress(p.tokenOwnerRecord.toBase58())}</span>
           {p.votingAt && (
-            <span>Voting started: {new Date(p.votingAt.toNumber() * 1000).toLocaleDateString()}</span>
+            <span>Voting started: {new Date(safeToNumber(p.votingAt) * 1000).toLocaleDateString()}</span>
           )}
           {p.votingCompletedAt && (
-            <span>Voting ended: {new Date(p.votingCompletedAt.toNumber() * 1000).toLocaleDateString()}</span>
+            <span>Voting ended: {new Date(safeToNumber(p.votingCompletedAt) * 1000).toLocaleDateString()}</span>
           )}
           {p.voteThreshold && (
             <span>Threshold: {p.voteThreshold.value}%</span>
@@ -377,7 +387,7 @@ export default function ProposalDetailPage() {
         <div className="rounded-xl border border-white/10 bg-white/5 p-5">
           <h2 className="font-semibold mb-3">Description</h2>
           <div className="prose prose-invert prose-sm max-w-none text-sm text-muted leading-relaxed [&_a]:text-red-400 [&_a:hover]:underline [&_h1]:text-lg [&_h2]:text-base [&_h3]:text-sm [&_code]:bg-white/10 [&_code]:px-1 [&_code]:rounded [&_pre]:bg-white/5 [&_pre]:p-3 [&_pre]:rounded-lg [&_pre]:overflow-x-auto [&_ul]:list-disc [&_ul]:pl-4 [&_ol]:list-decimal [&_ol]:pl-4 [&_blockquote]:border-l-2 [&_blockquote]:border-red-400/30 [&_blockquote]:pl-3 [&_blockquote]:italic">
-            <Markdown>{description}</Markdown>
+            <Markdown rehypePlugins={[rehypeSanitize]}>{description}</Markdown>
           </div>
         </div>
       )}

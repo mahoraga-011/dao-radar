@@ -1,3 +1,12 @@
+export function safeToNumber(bn: { toNumber: () => number; toString: () => string }): number {
+  try {
+    return bn.toNumber();
+  } catch {
+    // Overflow — parse from string, may lose precision but won't crash
+    return Number(bn.toString());
+  }
+}
+
 import { clsx, type ClassValue } from "clsx";
 import { twMerge } from "tailwind-merge";
 

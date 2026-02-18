@@ -7,7 +7,6 @@ import {
   Crosshair,
   Lightning,
   Brain,
-  ShieldCheck,
   ArrowRight,
   Target,
 } from "@phosphor-icons/react";
@@ -95,7 +94,7 @@ export default function LandingPage() {
           <WalletMultiButton />
         )}
         <Link
-          href="/dashboard"
+          href="/explore"
           className="inline-flex items-center gap-2 rounded-lg border border-red-500/20 px-6 py-3 font-medium text-muted hover:text-foreground hover:border-red-500/40 transition-all"
         >
           Browse DAOs
@@ -105,7 +104,7 @@ export default function LandingPage() {
       {/* Stats bar */}
       <div className="mt-16 flex flex-wrap items-center justify-center gap-6 sm:gap-8 text-center animate-fade-in-up-delay-3">
         <div>
-          <p className="text-2xl font-bold text-red-400 font-mono">4,262</p>
+          <p className="text-2xl font-bold text-red-400 font-mono">4,000+</p>
           <p className="text-xs text-muted uppercase tracking-wider">DAOs Tracked</p>
         </div>
         <div className="w-px h-8 bg-white/10" />

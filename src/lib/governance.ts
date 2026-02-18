@@ -1,4 +1,6 @@
 import { Connection, PublicKey } from "@solana/web3.js";
+import { RPC_URL } from "./rpc";
+import { safeToNumber } from "./utils";
 import {
   getRealm,
   getRealms,
@@ -24,12 +26,6 @@ import {
 export const SPL_GOV_PROGRAM_ID = new PublicKey(
   "GovER5Lthms3bLBqWub97yVrMmEogzX7xNjdXpPPCVZw"
 );
-
-const RPC_URL =
-  typeof window !== "undefined"
-    ? (process.env.NEXT_PUBLIC_SOLANA_RPC_URL ||
-      "https://mainnet.helius-rpc.com/?api-key=9adfab8a-9e5e-4c7e-aa3f-7ac2bbc980e7")
-    : "https://mainnet.helius-rpc.com/?api-key=9adfab8a-9e5e-4c7e-aa3f-7ac2bbc980e7";
 
 let _connection: Connection | null = null;
 export function getConnection(): Connection {
@@ -106,7 +102,7 @@ export async function getUserDAOs(
         let totalVotingPowerNum = 0;
         for (const r of userRecords) {
           const depositAmount = r.account.governingTokenDepositAmount;
-          const amt = depositAmount.toNumber();
+          const amt = safeToNumber(depositAmount);
           totalVotingPowerNum += amt;
           if (amt > maxDeposit) {
             maxDeposit = amt;
@@ -161,10 +157,15 @@ export async function getFeaturedRealms(): Promise<DAOInfo[]> {
       if (cached) {
         const { data, timestamp } = JSON.parse(cached);
         if (Date.now() - timestamp < 5 * 60 * 1000) {
-          // Rehydrate PublicKeys from cached data
+          // Rehydrate from cached minimal data
           return data.map((d: { realmPubkey: string; name: string; activeProposals: number }) => ({
             realmPubkey: new PublicKey(d.realmPubkey),
-            realm: { account: { name: d.name, communityMint: new PublicKey(d.realmPubkey), config: { councilMint: undefined } } } as unknown as ProgramAccount<Realm>,
+            realm: {
+              pubkey: new PublicKey(d.realmPubkey),
+              account: {
+                name: d.name,
+              },
+            } as ProgramAccount<Realm>,
             activeProposals: d.activeProposals,
           }));
         }
@@ -256,8 +257,8 @@ export async function getRealmProposals(
     const aActive = a.proposal.state === ProposalState.Voting ? 0 : 1;
     const bActive = b.proposal.state === ProposalState.Voting ? 0 : 1;
     if (aActive !== bActive) return aActive - bActive;
-    const aTime = a.proposal.votingAt?.toNumber() || a.proposal.draftAt.toNumber();
-    const bTime = b.proposal.votingAt?.toNumber() || b.proposal.draftAt.toNumber();
+    const aTime = a.proposal.votingAt ? safeToNumber(a.proposal.votingAt) : safeToNumber(a.proposal.draftAt);
+    const bTime = b.proposal.votingAt ? safeToNumber(b.proposal.votingAt) : safeToNumber(b.proposal.draftAt);
     return bTime - aTime;
   });
 

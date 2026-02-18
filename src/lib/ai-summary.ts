@@ -1,5 +1,3 @@
-const GROQ_BASE_URL = "https://api.groq.com/openai/v1";
-
 // In-memory cache
 const summaryCache = new Map<string, { summary: string; impact: string }>();
 

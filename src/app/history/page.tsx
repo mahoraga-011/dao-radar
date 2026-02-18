@@ -44,18 +44,22 @@ export default function HistoryPage() {
         const voteRecords = await getUserVoteRecords(publicKey);
         const items: VoteHistoryItem[] = [];
 
-        // Fetch proposal names for each vote (limit to 20 most recent)
+        // Fetch proposal names in batches of 5 to avoid RPC overload
         const recent = voteRecords.slice(0, 20);
-        await Promise.allSettled(
-          recent.map(async (vr) => {
-            try {
-              const proposal = await getProposalDetail(vr.account.proposal);
-              items.push({ voteRecord: vr, proposal });
-            } catch {
-              items.push({ voteRecord: vr });
-            }
-          })
-        );
+        const BATCH_SIZE = 5;
+        for (let i = 0; i < recent.length; i += BATCH_SIZE) {
+          const batch = recent.slice(i, i + BATCH_SIZE);
+          await Promise.allSettled(
+            batch.map(async (vr) => {
+              try {
+                const proposal = await getProposalDetail(vr.account.proposal);
+                items.push({ voteRecord: vr, proposal });
+              } catch {
+                items.push({ voteRecord: vr });
+              }
+            })
+          );
+        }
 
         if (!cancelled) setVotes(items);
       } catch (err) {
@@ -147,15 +151,17 @@ function VoteHistoryRow({ item }: { item: VoteHistoryItem }) {
   const proposalName = item.proposal?.account.name || shortenAddress(vr.proposal.toBase58(), 8);
 
   return (
-    <div className="flex items-center gap-4 rounded-xl border border-white/10 bg-white/5 p-4">
-      {voteIcon}
-      <div className="flex-1 min-w-0">
-        <p className="font-medium truncate">{proposalName}</p>
-        <p className="text-xs text-muted">
-          Proposal: {shortenAddress(vr.proposal.toBase58())}
-        </p>
+    <Link href={`/proposal/${vr.proposal.toBase58()}`}>
+      <div className="flex items-center gap-4 rounded-xl border border-white/10 bg-white/5 p-4 hover:border-accent/30 hover:bg-white/[0.07] transition-all cursor-pointer">
+        {voteIcon}
+        <div className="flex-1 min-w-0">
+          <p className="font-medium truncate">{proposalName}</p>
+          <p className="text-xs text-muted">
+            Proposal: {shortenAddress(vr.proposal.toBase58())}
+          </p>
+        </div>
+        <span className="text-sm text-muted">{voteLabel}</span>
       </div>
-      <span className="text-sm text-muted">{voteLabel}</span>
-    </div>
+    </Link>
   );
 }

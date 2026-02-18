@@ -82,7 +82,10 @@ export default function ExplorePage() {
         }
       } catch (err) {
         console.error("Failed to load realms:", err);
-        if (!cancelled) setError("Failed to load DAOs. The RPC may be rate-limited — try again in a moment.");
+        const msg = err instanceof Error && err.message.includes("timeout")
+          ? "Request timed out. The RPC may be overloaded — try again in a moment."
+          : "Failed to load DAOs. The RPC may be rate-limited — try again in a moment.";
+        if (!cancelled) setError(msg);
       } finally {
         if (!cancelled) setLoading(false);
       }

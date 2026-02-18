@@ -1,11 +1,16 @@
 import { NextResponse } from "next/server";
 
 const GROQ_API_KEY = process.env.GROQ_API_KEY;
-const GROQ_BASE_URL = "https://api.groq.com/openai/v1";
 
 export async function POST(req: Request) {
   try {
-    const { title, description } = await req.json();
+    const body = await req.json();
+    const title = typeof body.title === 'string' ? body.title.slice(0, 500) : '';
+    const description = typeof body.description === 'string' ? body.description.slice(0, 10000) : '';
+
+    if (!title && !description) {
+      return Response.json({ error: 'Title or description required' }, { status: 400 });
+    }
 
     if (!GROQ_API_KEY) {
       return NextResponse.json({
@@ -14,17 +19,7 @@ export async function POST(req: Request) {
       });
     }
 
-    const prompt = `You are a governance analyst. Analyze this DAO proposal and provide:
-1. A clear 2-3 sentence summary in plain English
-2. An impact assessment (Low, Medium, or High) with a brief reason
-
-Proposal Title: ${title}
-Proposal Description: ${description || "No description available"}
-
-Respond in JSON format:
-{"summary": "...", "impact": "High - reason" }`;
-
-    const res = await fetch(`${GROQ_BASE_URL}/chat/completions`, {
+    const res = await fetch("https://api.groq.com/openai/v1/chat/completions", {
       method: "POST",
       headers: {
         Authorization: `Bearer ${GROQ_API_KEY}`,
@@ -32,7 +27,16 @@ Respond in JSON format:
       },
       body: JSON.stringify({
         model: "llama-3.1-8b-instant",
-        messages: [{ role: "user", content: prompt }],
+        messages: [
+          {
+            role: "system",
+            content: "You are a governance proposal analyst. Summarize the following DAO proposal in plain English. Return JSON with \"summary\" (2-3 sentences) and \"impact\" (Low/Medium/High with brief reason). Only return valid JSON, nothing else.",
+          },
+          {
+            role: "user",
+            content: `Proposal Title: ${title}\n\nProposal Description:\n${description}`,
+          },
+        ],
         temperature: 0.3,
         max_tokens: 300,
         response_format: { type: "json_object" },
