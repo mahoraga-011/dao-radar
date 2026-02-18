@@ -4,8 +4,7 @@
 
 > Scan every DAO you belong to. AI-powered proposal intelligence. One-click voting across all your Solana DAOs.
 
-![DAO Radar Screenshot](./screenshot.png)
-<!-- Screenshot placeholder — replace with actual screenshot -->
+<!-- Screenshot will be added after deployment -->
 
 ## Features
 
