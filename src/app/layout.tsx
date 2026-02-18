@@ -20,6 +20,20 @@ export const metadata: Metadata = {
   title: "DAO Radar — Solana Governance Dashboard",
   description:
     "Your governance command center. See all your DAOs, AI-summarized proposals, and vote in one click.",
+  openGraph: {
+    title: "DAO Radar — Solana Governance Dashboard",
+    description:
+      "Scan every DAO you belong to. AI-powered proposal intelligence. One-click voting across all your Solana DAOs.",
+    type: "website",
+    siteName: "DAO Radar",
+    url: "https://dao-radar.vercel.app",
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "DAO Radar — Solana Governance Dashboard",
+    description:
+      "Scan every DAO you belong to. AI-powered proposal intelligence. One-click voting across all your Solana DAOs.",
+  },
 };
 
 export default function RootLayout({
