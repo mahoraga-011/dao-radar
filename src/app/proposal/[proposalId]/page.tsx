@@ -11,10 +11,12 @@ import {
   fetchProposalDescription,
   buildCastVoteIx,
   getConnection,
+  getVoterTokenOwnerRecord,
   ProposalState,
   type ProgramAccount,
   type Proposal,
   type Realm,
+  type TokenOwnerRecord,
 } from "@/lib/governance";
 import { summarizeProposal } from "@/lib/ai-summary";
 import { shortenAddress, timeAgo, formatNumber } from "@/lib/utils";
@@ -45,14 +47,18 @@ export default function ProposalDetailPage() {
   const [aiSummary, setAiSummary] = useState<{ summary: string; impact: string } | null>(null);
   const [aiLoading, setAiLoading] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [voterRecord, setVoterRecord] = useState<ProgramAccount<TokenOwnerRecord> | null>(null);
+  const [noVotingPower, setNoVotingPower] = useState(false);
   const [voting, setVoting] = useState(false);
   const [voteResult, setVoteResult] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
 
     async function load() {
       setLoading(true);
+      setError(null);
       try {
         const proposalPubkey = new PublicKey(proposalId);
         const proposalData = await getProposalDetail(proposalPubkey);
@@ -73,6 +79,7 @@ export default function ProposalDetailPage() {
         }
       } catch (err) {
         console.error("Failed to load proposal:", err);
+        if (!cancelled) setError("Failed to load proposal. The RPC may be rate-limited — try again in a moment.");
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -81,6 +88,37 @@ export default function ProposalDetailPage() {
     load();
     return () => { cancelled = true; };
   }, [proposalId, realmId]);
+
+  // Fetch voter's TokenOwnerRecord when wallet is connected
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadVoterRecord() {
+      if (!publicKey || !realmId || !realm) return;
+
+      setNoVotingPower(false);
+      try {
+        const communityMint = realm.account.communityMint;
+        const record = await getVoterTokenOwnerRecord(
+          new PublicKey(realmId),
+          communityMint,
+          publicKey
+        );
+        if (!cancelled) {
+          if (record) {
+            setVoterRecord(record);
+          } else {
+            setNoVotingPower(true);
+          }
+        }
+      } catch {
+        if (!cancelled) setNoVotingPower(true);
+      }
+    }
+
+    loadVoterRecord();
+    return () => { cancelled = true; };
+  }, [publicKey, realmId, realm]);
 
   const generateSummary = useCallback(async () => {
     if (!proposal) return;
@@ -103,7 +141,7 @@ export default function ProposalDetailPage() {
   }, [proposal, description, aiSummary, aiLoading, generateSummary]);
 
   const handleVote = async (voteType: "approve" | "deny" | "abstain") => {
-    if (!publicKey || !signTransaction || !proposal || !realmId) return;
+    if (!publicKey || !signTransaction || !proposal || !realmId || !voterRecord || !realm) return;
     setVoting(true);
     setVoteResult(null);
 
@@ -114,9 +152,9 @@ export default function ProposalDetailPage() {
         governance: p.governance,
         proposal: proposal.pubkey,
         proposalOwnerRecord: p.tokenOwnerRecord,
-        voterTokenOwnerRecord: p.tokenOwnerRecord, // user's record - simplified
+        voterTokenOwnerRecord: voterRecord.pubkey,
         governanceAuthority: publicKey,
-        governingTokenMint: p.governingTokenMint,
+        governingTokenMint: realm.account.communityMint,
         payer: publicKey,
         voteType,
       });
@@ -145,6 +183,22 @@ export default function ProposalDetailPage() {
       <div className="flex items-center justify-center py-24">
         <LoadingSpinner size={40} />
         <span className="ml-3 text-muted">Loading proposal...</span>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="flex flex-col items-center justify-center py-24">
+        <Warning size={48} className="mb-4 text-red-400" />
+        <p className="text-lg font-medium">Something went wrong</p>
+        <p className="text-sm text-muted mt-2 max-w-md text-center">{error}</p>
+        <button
+          onClick={() => window.location.reload()}
+          className="mt-4 rounded-lg bg-accent px-4 py-2 text-sm font-medium text-white hover:bg-accent-hover transition-colors"
+        >
+          Try Again
+        </button>
       </div>
     );
   }
@@ -188,6 +242,18 @@ export default function ProposalDetailPage() {
         {realm && (
           <p className="text-sm text-muted mt-1">{realm.account.name}</p>
         )}
+        <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted">
+          <span>Proposer: {shortenAddress(p.tokenOwnerRecord.toBase58())}</span>
+          {p.votingAt && (
+            <span>Voting started: {new Date(p.votingAt.toNumber() * 1000).toLocaleDateString()}</span>
+          )}
+          {p.votingCompletedAt && (
+            <span>Voting ended: {new Date(p.votingCompletedAt.toNumber() * 1000).toLocaleDateString()}</span>
+          )}
+          {p.voteThreshold && (
+            <span>Threshold: {p.voteThreshold.value}%</span>
+          )}
+        </div>
       </div>
 
       {/* AI Summary */}
@@ -249,6 +315,16 @@ export default function ProposalDetailPage() {
             <p className="text-sm text-muted">
               Connect your wallet to vote on this proposal.
             </p>
+          ) : noVotingPower ? (
+            <div className="flex items-center gap-2 text-sm text-amber-400">
+              <Warning size={16} />
+              You have no voting power in this DAO. Deposit governance tokens to participate.
+            </div>
+          ) : !voterRecord ? (
+            <div className="flex items-center gap-2 text-sm text-muted">
+              <LoadingSpinner size={16} />
+              Loading your voting record...
+            </div>
           ) : (
             <>
               <div className="flex gap-3">

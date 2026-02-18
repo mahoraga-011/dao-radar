@@ -276,6 +276,27 @@ export async function getGovernanceInfo(governancePubkey: PublicKey) {
   return getGovernance(connection, governancePubkey);
 }
 
+// Get voter's TokenOwnerRecord for a realm
+export async function getVoterTokenOwnerRecord(
+  realmPubkey: PublicKey,
+  governingTokenMint: PublicKey,
+  voterPubkey: PublicKey
+): Promise<ProgramAccount<TokenOwnerRecord> | null> {
+  const connection = getConnection();
+  try {
+    const record = await getTokenOwnerRecordForRealm(
+      connection,
+      SPL_GOV_PROGRAM_ID,
+      realmPubkey,
+      governingTokenMint,
+      voterPubkey
+    );
+    return record;
+  } catch {
+    return null;
+  }
+}
+
 // Get realm info
 export async function getRealmInfo(realmPubkey: PublicKey) {
   const connection = getConnection();
