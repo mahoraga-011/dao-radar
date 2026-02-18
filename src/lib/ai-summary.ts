@@ -11,14 +11,16 @@ export async function summarizeProposal(
   const cached = summaryCache.get(cacheKey);
   if (cached) return cached;
 
-  // Also check localStorage
+  // Also check localStorage (1 hour TTL)
   if (typeof window !== "undefined") {
     try {
       const stored = localStorage.getItem(`ai_summary_${cacheKey}`);
       if (stored) {
-        const parsed = JSON.parse(stored);
-        summaryCache.set(cacheKey, parsed);
-        return parsed;
+        const { data, timestamp } = JSON.parse(stored);
+        if (Date.now() - timestamp < 60 * 60 * 1000) {
+          summaryCache.set(cacheKey, data);
+          return data;
+        }
       }
     } catch {
       // ignore
@@ -40,7 +42,7 @@ export async function summarizeProposal(
     summaryCache.set(cacheKey, result);
     if (typeof window !== "undefined") {
       try {
-        localStorage.setItem(`ai_summary_${cacheKey}`, JSON.stringify(result));
+        localStorage.setItem(`ai_summary_${cacheKey}`, JSON.stringify({ data: result, timestamp: Date.now() }));
       } catch {
         // storage full
       }
@@ -52,7 +54,7 @@ export async function summarizeProposal(
     return {
       summary: description
         ? description.slice(0, 200) + (description.length > 200 ? "..." : "")
-        : `Proposal: ${title}`,
+        : "Summary unavailable — could not generate AI analysis for this proposal.",
       impact: "Unknown",
     };
   }

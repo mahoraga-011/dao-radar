@@ -146,8 +146,28 @@ export async function getUserDAOs(
   return results;
 }
 
-// Fetch featured realms for browse mode
+// Fetch featured realms for browse mode (with 5-min localStorage cache)
 export async function getFeaturedRealms(): Promise<DAOInfo[]> {
+  // Check localStorage cache
+  if (typeof window !== "undefined") {
+    try {
+      const cached = localStorage.getItem("featured_realms_cache");
+      if (cached) {
+        const { data, timestamp } = JSON.parse(cached);
+        if (Date.now() - timestamp < 5 * 60 * 1000) {
+          // Rehydrate PublicKeys from cached data
+          return data.map((d: { realmPubkey: string; name: string; activeProposals: number }) => ({
+            realmPubkey: new PublicKey(d.realmPubkey),
+            realm: { account: { name: d.name, communityMint: new PublicKey(d.realmPubkey), config: { councilMint: undefined } } } as unknown as ProgramAccount<Realm>,
+            activeProposals: d.activeProposals,
+          }));
+        }
+      }
+    } catch {
+      // ignore cache errors
+    }
+  }
+
   const connection = getConnection();
   const results: DAOInfo[] = [];
 
@@ -185,6 +205,21 @@ export async function getFeaturedRealms(): Promise<DAOInfo[]> {
   });
 
   await Promise.allSettled(promises);
+
+  // Cache to localStorage
+  if (typeof window !== "undefined" && results.length > 0) {
+    try {
+      const cacheData = results.map((d) => ({
+        realmPubkey: d.realmPubkey.toBase58(),
+        name: d.realm.account.name,
+        activeProposals: d.activeProposals,
+      }));
+      localStorage.setItem("featured_realms_cache", JSON.stringify({ data: cacheData, timestamp: Date.now() }));
+    } catch {
+      // ignore
+    }
+  }
+
   return results;
 }
 

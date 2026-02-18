@@ -1,36 +1,64 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# DAO Radar
+
+**Your governance command center for Solana DAOs.**
+
+> Scan every DAO you belong to. AI-powered proposal intelligence. One-click voting across all your Solana DAOs.
+
+![DAO Radar Screenshot](./screenshot.png)
+<!-- Screenshot placeholder — replace with actual screenshot -->
+
+## Features
+
+- **DAO Discovery** — Automatically detect all DAOs where you hold governance tokens
+- **AI Proposal Summaries** — Complex proposals decoded into plain English using Groq/LLaMA
+- **One-Click Voting** — Cast votes (For / Against / Abstain) without leaving the app
+- **Browse Mode** — Explore 12 featured Solana DAOs without connecting a wallet
+- **Voting History** — Track your governance participation across all DAOs
+- **Real-time Status** — See active proposals, vote counts, and governance state
+
+## Tech Stack
+
+- **Framework:** Next.js 16 (App Router)
+- **Language:** TypeScript
+- **Styling:** Tailwind CSS 4
+- **Blockchain:** Solana Web3.js + SPL Governance SDK
+- **AI:** Groq API (LLaMA 3.1 8B)
+- **RPC:** Helius
+- **Icons:** Phosphor Icons
+- **Font:** Plus Jakarta Sans
 
 ## Getting Started
 
-First, run the development server:
-
 ```bash
-npm run dev
-# or
-yarn dev
-# or
+# Install dependencies
+pnpm install
+
+# Set up environment variables
+cp .env.example .env.local
+# Edit .env.local with your keys:
+#   NEXT_PUBLIC_SOLANA_RPC_URL=https://mainnet.helius-rpc.com/?api-key=YOUR_KEY
+#   GROQ_API_KEY=your_groq_api_key
+
+# Run development server
 pnpm dev
-# or
-bun dev
+
+# Build for production
+pnpm build
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Open [http://localhost:3000](http://localhost:3000) to see the app.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Environment Variables
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+| Variable | Description |
+|----------|-------------|
+| `NEXT_PUBLIC_SOLANA_RPC_URL` | Solana RPC endpoint (Helius recommended) |
+| `GROQ_API_KEY` | Groq API key for AI summaries |
 
-## Learn More
+## Deployment
 
-To learn more about Next.js, take a look at the following resources:
+Deployed on [Vercel](https://dao-radar.vercel.app).
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+---
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+Built for the **Solana Graveyard Hackathon** — Realms DAO track.

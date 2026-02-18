@@ -69,7 +69,7 @@ export default function LandingPage() {
         <RadarScanner />
       </div>
 
-      <h1 className="mb-4 text-5xl font-bold tracking-tight md:text-6xl animate-fade-in-up-delay-1">
+      <h1 className="mb-4 text-4xl font-bold tracking-tight sm:text-5xl md:text-6xl animate-fade-in-up-delay-1">
         <span className="text-red-400">DAO</span> Radar
       </h1>
 
@@ -103,7 +103,7 @@ export default function LandingPage() {
       </div>
 
       {/* Stats bar */}
-      <div className="mt-16 flex items-center gap-8 text-center animate-fade-in-up-delay-3">
+      <div className="mt-16 flex flex-wrap items-center justify-center gap-6 sm:gap-8 text-center animate-fade-in-up-delay-3">
         <div>
           <p className="text-2xl font-bold text-red-400 font-mono">4,262</p>
           <p className="text-xs text-muted uppercase tracking-wider">DAOs Tracked</p>

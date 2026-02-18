@@ -1,12 +1,14 @@
 import type { Metadata } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
+import { Plus_Jakarta_Sans, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import WalletProvider from "@/components/WalletProvider";
 import Navbar from "@/components/Navbar";
+import Footer from "@/components/Footer";
 
-const geistSans = Geist({
-  variable: "--font-geist-sans",
+const plusJakarta = Plus_Jakarta_Sans({
+  variable: "--font-plus-jakarta",
   subsets: ["latin"],
+  weight: ["400", "500", "600", "700", "800"],
 });
 
 const geistMono = Geist_Mono({
@@ -27,12 +29,18 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" className="dark">
+      <head>
+        <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+      </head>
       <body
-        className={`${geistSans.variable} ${geistMono.variable} antialiased min-h-screen`}
+        className={`${plusJakarta.variable} ${geistMono.variable} antialiased min-h-screen flex flex-col`}
       >
         <WalletProvider>
           <Navbar />
-          <main className="mx-auto max-w-7xl px-4 py-8">{children}</main>
+          <main className="mx-auto w-full max-w-7xl flex-1 px-4 py-8 animate-page-fade-in">
+            {children}
+          </main>
+          <Footer />
         </WalletProvider>
       </body>
     </html>

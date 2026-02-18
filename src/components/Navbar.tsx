@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 import dynamic from "next/dynamic";
 import { useWallet } from "@solana/wallet-adapter-react";
 import { Crosshair, House, ClockCounterClockwise, Compass } from "@phosphor-icons/react";
@@ -9,6 +10,23 @@ const WalletMultiButton = dynamic(
   () => import("@solana/wallet-adapter-react-ui").then((m) => m.WalletMultiButton),
   { ssr: false }
 );
+
+function NavLink({ href, icon, label }: { href: string; icon: React.ReactNode; label: string }) {
+  const pathname = usePathname();
+  const isActive = pathname === href || (href !== "/" && pathname.startsWith(href));
+
+  return (
+    <Link
+      href={href}
+      className={`flex items-center gap-1.5 text-sm transition-colors ${
+        isActive ? "text-red-400 font-medium" : "text-muted hover:text-red-400"
+      }`}
+    >
+      {icon}
+      {label}
+    </Link>
+  );
+}
 
 export default function Navbar() {
   const { connected } = useWallet();
@@ -20,33 +38,17 @@ export default function Navbar() {
           <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-red-500/10 border border-red-500/20 group-hover:border-red-500/40 transition-colors">
             <Crosshair size={18} weight="bold" className="text-red-400" />
           </div>
-          <span>DAO <span className="text-red-400">Radar</span></span>
+          <span className="hidden sm:inline">DAO <span className="text-red-400">Radar</span></span>
         </Link>
 
-        <div className="hidden items-center gap-6 md:flex">
-          <Link
-            href="/dashboard"
-            className="flex items-center gap-1.5 text-sm text-muted hover:text-red-400 transition-colors"
-          >
-            <House size={18} />
-            Dashboard
-          </Link>
+        <div className="flex items-center gap-4 sm:gap-6">
+          <NavLink href="/dashboard" icon={<House size={18} />} label="Dashboard" />
           {connected && (
-            <Link
-              href="/history"
-              className="flex items-center gap-1.5 text-sm text-muted hover:text-red-400 transition-colors"
-            >
-              <ClockCounterClockwise size={18} />
-              History
-            </Link>
+            <NavLink href="/history" icon={<ClockCounterClockwise size={18} />} label="History" />
           )}
-          <Link
-            href="/dashboard"
-            className="flex items-center gap-1.5 text-sm text-muted hover:text-red-400 transition-colors"
-          >
-            <Compass size={18} />
-            Explore
-          </Link>
+          <div className="hidden sm:block">
+            <NavLink href="/dashboard" icon={<Compass size={18} />} label="Explore" />
+          </div>
         </div>
 
         <WalletMultiButton />

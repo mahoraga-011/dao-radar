@@ -14,7 +14,7 @@ import {
 } from "@/lib/governance";
 import { shortenAddress, timeAgo } from "@/lib/utils";
 import StatusBadge from "@/components/StatusBadge";
-import LoadingSpinner from "@/components/LoadingSpinner";
+import { SkeletonProposalList } from "@/components/Skeleton";
 import { ArrowLeft, FileText, Funnel } from "@phosphor-icons/react";
 
 type FilterType = "all" | "active" | "completed" | "defeated";
@@ -69,9 +69,13 @@ export default function DAODetailPage() {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center py-24">
-        <LoadingSpinner size={40} />
-        <span className="ml-3 text-muted">Loading DAO...</span>
+      <div>
+        <div className="mb-6 skeleton h-4 w-32" />
+        <div className="mb-8">
+          <div className="skeleton h-8 w-48 mb-2" />
+          <div className="skeleton h-4 w-64" />
+        </div>
+        <SkeletonProposalList count={5} />
       </div>
     );
   }

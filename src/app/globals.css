@@ -13,7 +13,7 @@
   --color-danger: #ef4444;
   --color-warning: #f59e0b;
   --color-info: #ef4444;
-  --font-sans: var(--font-geist-sans);
+  --font-sans: var(--font-plus-jakarta);
   --font-mono: var(--font-geist-mono);
 }
 
@@ -182,6 +182,54 @@ body {
 
 .wallet-adapter-modal-wrapper {
   background: #1a1a1a !important;
+}
+
+/* Page transition */
+@keyframes page-fade-in {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.animate-page-fade-in {
+  animation: page-fade-in 0.3s ease-out;
+}
+
+/* Skeleton shimmer */
+@keyframes shimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+
+.skeleton {
+  background: linear-gradient(90deg, rgba(255,255,255,0.05) 25%, rgba(255,255,255,0.1) 50%, rgba(255,255,255,0.05) 75%);
+  background-size: 200% 100%;
+  animation: shimmer 1.5s infinite;
+  border-radius: 0.5rem;
+}
+
+/* Card hover */
+.card-hover {
+  transition: all 0.2s ease;
+}
+.card-hover:hover {
+  transform: translateY(-2px) scale(1.01);
+  box-shadow: 0 0 24px rgba(239, 68, 68, 0.1), 0 0 0 1px rgba(239, 68, 68, 0.15);
+}
+
+/* Vote bar animation */
+@keyframes vote-bar-fill {
+  from { width: 0%; }
+}
+.animate-vote-bar {
+  animation: vote-bar-fill 0.8s ease-out forwards;
+}
+
+/* Mobile radar scale */
+@media (max-width: 640px) {
+  .radar-container {
+    width: 220px;
+    height: 220px;
+  }
 }
 
 /* Custom scrollbar */

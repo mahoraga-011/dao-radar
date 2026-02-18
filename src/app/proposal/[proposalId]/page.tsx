@@ -20,6 +20,7 @@ import { summarizeProposal } from "@/lib/ai-summary";
 import { shortenAddress, timeAgo, formatNumber } from "@/lib/utils";
 import StatusBadge from "@/components/StatusBadge";
 import LoadingSpinner from "@/components/LoadingSpinner";
+import Markdown from "react-markdown";
 import {
   ArrowLeft,
   ThumbsUp,
@@ -299,8 +300,8 @@ export default function ProposalDetailPage() {
       {description && (
         <div className="rounded-xl border border-white/10 bg-white/5 p-5">
           <h2 className="font-semibold mb-3">Description</h2>
-          <div className="prose prose-invert prose-sm max-w-none whitespace-pre-wrap text-sm text-muted leading-relaxed">
-            {description}
+          <div className="prose prose-invert prose-sm max-w-none text-sm text-muted leading-relaxed [&_a]:text-red-400 [&_a:hover]:underline [&_h1]:text-lg [&_h2]:text-base [&_h3]:text-sm [&_code]:bg-white/10 [&_code]:px-1 [&_code]:rounded [&_pre]:bg-white/5 [&_pre]:p-3 [&_pre]:rounded-lg [&_pre]:overflow-x-auto [&_ul]:list-disc [&_ul]:pl-4 [&_ol]:list-decimal [&_ol]:pl-4 [&_blockquote]:border-l-2 [&_blockquote]:border-red-400/30 [&_blockquote]:pl-3 [&_blockquote]:italic">
+            <Markdown>{description}</Markdown>
           </div>
         </div>
       )}
@@ -329,7 +330,7 @@ function VoteBarRow({
       </div>
       <div className="h-2 w-full rounded-full bg-white/10 overflow-hidden">
         <div
-          className={`h-full rounded-full ${color}`}
+          className={`h-full rounded-full animate-vote-bar ${color}`}
           style={{ width: `${Math.max(percent, 0.5)}%` }}
         />
       </div>
