@@ -48,7 +48,7 @@ export default function Navbar() {
             <NavLink href="/history" icon={<ClockCounterClockwise size={18} />} label="History" />
           )}
           <div className="hidden sm:block">
-            <NavLink href="/dashboard" icon={<Compass size={18} />} label="Explore" />
+            <NavLink href="/explore" icon={<Compass size={18} />} label="Explore" />
           </div>
         </div>
 

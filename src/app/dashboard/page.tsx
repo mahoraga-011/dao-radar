@@ -16,6 +16,7 @@ import {
   Users,
   MagnifyingGlass,
   Crosshair,
+  Globe,
 } from "@phosphor-icons/react";
 
 export default function DashboardPage() {
@@ -121,11 +122,23 @@ export default function DashboardPage() {
           )}
         </div>
       ) : (
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {filtered.map((dao) => (
-            <DAOCard key={dao.realmPubkey.toBase58()} dao={dao} />
-          ))}
-        </div>
+        <>
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            {filtered.map((dao) => (
+              <DAOCard key={dao.realmPubkey.toBase58()} dao={dao} />
+            ))}
+          </div>
+
+          <div className="mt-6 text-center">
+            <Link
+              href="/explore"
+              className="inline-flex items-center gap-2 text-sm text-muted hover:text-accent transition-colors"
+            >
+              <Globe size={16} />
+              Explore all 4,262+ DAOs
+            </Link>
+          </div>
+        </>
       )}
     </div>
   );
