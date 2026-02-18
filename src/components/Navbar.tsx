@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 import dynamic from "next/dynamic";
 import { useWallet } from "@solana/wallet-adapter-react";
 import { Crosshair, House, ClockCounterClockwise, Compass } from "@phosphor-icons/react";
+import NotificationBell from "./NotificationBell";
 
 const WalletMultiButton = dynamic(
   () => import("@solana/wallet-adapter-react-ui").then((m) => m.WalletMultiButton),
@@ -51,7 +52,10 @@ export default function Navbar() {
           </div>
         </div>
 
-        <WalletMultiButton />
+        <div className="flex items-center gap-3">
+          <NotificationBell />
+          <WalletMultiButton />
+        </div>
       </div>
     </nav>
   );
