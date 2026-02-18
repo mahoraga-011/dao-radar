@@ -28,8 +28,8 @@ export const SPL_GOV_PROGRAM_ID = new PublicKey(
 const RPC_URL =
   typeof window !== "undefined"
     ? (process.env.NEXT_PUBLIC_SOLANA_RPC_URL ||
-      "https://api.mainnet-beta.solana.com")
-    : "https://api.mainnet-beta.solana.com";
+      "https://mainnet.helius-rpc.com/?api-key=9adfab8a-9e5e-4c7e-aa3f-7ac2bbc980e7")
+    : "https://mainnet.helius-rpc.com/?api-key=9adfab8a-9e5e-4c7e-aa3f-7ac2bbc980e7";
 
 let _connection: Connection | null = null;
 export function getConnection(): Connection {
