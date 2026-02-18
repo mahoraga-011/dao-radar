@@ -99,7 +99,7 @@ export default function NotificationBell() {
   // Poll every 5 minutes
   useEffect(() => {
     if (!connected) return;
-    const interval = setInterval(fetchNotifications, 5 * 60 * 1000);
+    const interval = setInterval(fetchNotifications, 30 * 60 * 1000);
     return () => clearInterval(interval);
   }, [connected, fetchNotifications]);
 
