@@ -39,16 +39,20 @@ export function getConnection(): Connection {
   return _connection;
 }
 
-// Well-known DAOs for browse mode
+// Well-known DAOs for browse mode (verified mainnet pubkeys)
 export const FEATURED_REALMS: { name: string; pubkey: string }[] = [
   { name: "Mango DAO", pubkey: "DPiH3H3c7t47BMxqTxLsuPQpEC6Kne8GA9VXbxpnZxFE" },
-  { name: "Marinade", pubkey: "GUvMEjrGSCUDhGkRDMJdVkgKrLaqh1AUFPRMfjmpPrCf" },
-  { name: "Grape", pubkey: "By2sVGZXwfQq6BaEcACshCaiQjF8gSYbmJVFY5sKy5AR" },
-  { name: "MonkeDAO", pubkey: "B1CxhV1khhj2LDhvNKfKbVCU9jBjQqEi2wmMHAsteir" },
-  { name: "Realms Community", pubkey: "759pyfL9F9QL1uQ3RvfMipTvEZyR8xUA3we7RVqKJQCF" },
-  { name: "Metaplex", pubkey: "2sEcHwzsNBwRCDMaRPKXFz7AUwRCDvjnMDKbHEGvLgpY" },
-  { name: "UXD", pubkey: "43cZif6PH1VS11d3YNKUxjJRZqBpTmGmBiAoABhQe3Bh" },
-  { name: "Drift", pubkey: "FmFnRe35diFnbsGGHaSdAhhoMxCga4jb31NRKqFfxwFh" },
+  { name: "Marinade.Finance", pubkey: "3gmcbygQUUDgmtDtx41R7xSf3K4oFXrH9icPNijyq9pS" },
+  { name: "Drift Protocol", pubkey: "9nUyxzVL2FUMuWUiVZG66gwK15CJiM3PoLkfrnGfkvt6" },
+  { name: "Jupiter Aggregator", pubkey: "2Z5BXuRCJPqYUCBGyQTwAXHeJoFAnbtvoXja19aZFLKY" },
+  { name: "Pyth DAO", pubkey: "WQa9YVA3SVspDUjmnjMj4uygJpxR814mD931FhLxLvx" },
+  { name: "MonkeDAO", pubkey: "m8BR9yA89AJ9f2u3KeAFasJSuXDnd3xYDJJkBvQ2iw6" },
+  { name: "Grape", pubkey: "By2sVGZXwfQq6rAiAM3rNPJ9iQfb5e2QhnF4YjJ4Bip" },
+  { name: "Helium", pubkey: "6qGHqcZY4zLCWFvvBKfr8tHQfkD8arz8mAQPt4TDvTy5" },
+  { name: "Squads", pubkey: "6FYxSU9GE5imNLnqbUmJDktBfgVQeoVXVCVgtNuukS86" },
+  { name: "Solend", pubkey: "5EuXAPZCpzZnqpzVRX5Ytizh9BFVtbz3H8Xk9H5onxHD" },
+  { name: "Raydium DAO", pubkey: "GDBJ3qv4tJXiCbz5ASkSMYq6Xfb35MdXsMzgVaMnr9Q7" },
+  { name: "UXD Protocol", pubkey: "DkSvNgykZPPFczhJVh8HDkhz25ByrDoPcB32q75AYu9k" },
 ];
 
 export type DAOInfo = {
