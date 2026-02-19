@@ -27,6 +27,28 @@ export const SPL_GOV_PROGRAM_ID = new PublicKey(
   "GovER5Lthms3bLBqWub97yVrMmEogzX7xNjdXpPPCVZw"
 );
 
+// Run async tasks with limited concurrency to avoid RPC rate limits
+async function pMap<T, R>(
+  items: T[],
+  fn: (item: T) => Promise<R>,
+  concurrency = 5
+): Promise<PromiseSettledResult<R>[]> {
+  const results: PromiseSettledResult<R>[] = new Array(items.length);
+  let i = 0;
+  async function worker() {
+    while (i < items.length) {
+      const idx = i++;
+      try {
+        results[idx] = { status: "fulfilled", value: await fn(items[idx]) };
+      } catch (reason) {
+        results[idx] = { status: "rejected", reason };
+      }
+    }
+  }
+  await Promise.all(Array.from({ length: Math.min(concurrency, items.length) }, () => worker()));
+  return results;
+}
+
 let _connection: Connection | null = null;
 export function getConnection(): Connection {
   if (!_connection) {
@@ -89,58 +111,52 @@ export async function getUserDAOs(
       ...new Set(tokenOwnerRecords.map((t) => t.account.realm.toBase58())),
     ];
 
-    const realmPromises = realmPubkeys.map(async (realmPk) => {
-      try {
-        const realmPubkey = new PublicKey(realmPk);
-        const realm = await getRealm(connection, realmPubkey);
-        const userRecords = tokenOwnerRecords.filter(
-          (t) => t.account.realm.toBase58() === realmPk
-        );
+    await pMap(realmPubkeys, async (realmPk) => {
+      const realmPubkey = new PublicKey(realmPk);
+      const realm = await getRealm(connection, realmPubkey);
+      const userRecords = tokenOwnerRecords.filter(
+        (t) => t.account.realm.toBase58() === realmPk
+      );
 
-              let primaryRecord: ProgramAccount<TokenOwnerRecord> | undefined;
-        let maxDeposit = 0;
-        let totalVotingPowerNum = 0;
-        for (const r of userRecords) {
-          const depositAmount = r.account.governingTokenDepositAmount;
-          const amt = safeToNumber(depositAmount);
-          totalVotingPowerNum += amt;
-          if (amt > maxDeposit) {
-            maxDeposit = amt;
-            primaryRecord = r;
-          }
+      let primaryRecord: ProgramAccount<TokenOwnerRecord> | undefined;
+      let maxDeposit = 0;
+      let totalVotingPowerNum = 0;
+      for (const r of userRecords) {
+        const depositAmount = r.account.governingTokenDepositAmount;
+        const amt = safeToNumber(depositAmount);
+        totalVotingPowerNum += amt;
+        if (amt > maxDeposit) {
+          maxDeposit = amt;
+          primaryRecord = r;
         }
+      }
 
-        let activeProposals = 0;
-        try {
-          const proposals = await getAllProposals(
-            connection,
-            SPL_GOV_PROGRAM_ID,
-            realmPubkey
-          );
-          for (const batch of proposals) {
-            for (const p of batch) {
-              if (p.account.state === ProposalState.Voting) {
-                activeProposals++;
-              }
+      let activeProposals = 0;
+      try {
+        const proposals = await getAllProposals(
+          connection,
+          SPL_GOV_PROGRAM_ID,
+          realmPubkey
+        );
+        for (const batch of proposals) {
+          for (const p of batch) {
+            if (p.account.state === ProposalState.Voting) {
+              activeProposals++;
             }
           }
-        } catch {
-          // skip
         }
-
-        results.push({
-          realmPubkey,
-          realm,
-          votingPower: totalVotingPowerNum,
-          activeProposals,
-          tokenOwnerRecord: primaryRecord,
-        });
       } catch {
-        // skip failed realms
+        // skip
       }
-    });
 
-    await Promise.allSettled(realmPromises);
+      results.push({
+        realmPubkey,
+        realm,
+        votingPower: totalVotingPowerNum,
+        activeProposals,
+        tokenOwnerRecord: primaryRecord,
+      });
+    }, 2);
   } catch (err) {
     console.error("Error fetching user DAOs:", err);
   }
@@ -178,40 +194,34 @@ export async function getFeaturedRealms(): Promise<DAOInfo[]> {
   const connection = getConnection();
   const results: DAOInfo[] = [];
 
-  const promises = FEATURED_REALMS.map(async ({ pubkey }) => {
-    try {
-      const realmPubkey = new PublicKey(pubkey);
-      const realm = await getRealm(connection, realmPubkey);
+  await pMap(FEATURED_REALMS, async ({ pubkey }) => {
+    const realmPubkey = new PublicKey(pubkey);
+    const realm = await getRealm(connection, realmPubkey);
 
-      let activeProposals = 0;
-      try {
-        const proposals = await getAllProposals(
-          connection,
-          SPL_GOV_PROGRAM_ID,
-          realmPubkey
-        );
-        for (const batch of proposals) {
-          for (const p of batch) {
-            if (p.account.state === ProposalState.Voting) {
-              activeProposals++;
-            }
+    let activeProposals = 0;
+    try {
+      const proposals = await getAllProposals(
+        connection,
+        SPL_GOV_PROGRAM_ID,
+        realmPubkey
+      );
+      for (const batch of proposals) {
+        for (const p of batch) {
+          if (p.account.state === ProposalState.Voting) {
+            activeProposals++;
           }
         }
-      } catch {
-        // skip
       }
-
-      results.push({
-        realmPubkey,
-        realm,
-        activeProposals,
-      });
     } catch {
       // skip
     }
-  });
 
-  await Promise.allSettled(promises);
+    results.push({
+      realmPubkey,
+      realm,
+      activeProposals,
+    });
+  }, 2);
 
   // Cache to localStorage
   if (typeof window !== "undefined" && results.length > 0) {
@@ -232,12 +242,13 @@ export async function getFeaturedRealms(): Promise<DAOInfo[]> {
 
 // Get all proposals for a realm
 export async function getRealmProposals(
-  realmPubkey: PublicKey
+  realmPubkey: PublicKey,
+  programId: PublicKey = SPL_GOV_PROGRAM_ID
 ): Promise<ProposalInfo[]> {
   const connection = getConnection();
   const proposals = await getAllProposals(
     connection,
-    SPL_GOV_PROGRAM_ID,
+    programId,
     realmPubkey
   );
 
@@ -373,6 +384,17 @@ export async function buildCastVoteIx(params: {
   return instructions;
 }
 
+// Allowed hostnames for fetching proposal descriptions (SSRF protection)
+const ALLOWED_DESCRIPTION_HOSTS = new Set([
+  "ipfs.io",
+  "gateway.pinata.cloud",
+  "arweave.net",
+  "www.arweave.net",
+  "raw.githubusercontent.com",
+  "gist.githubusercontent.com",
+  "shdw-drive.genesysgo.net",
+]);
+
 // Fetch proposal description content
 export async function fetchProposalDescription(
   descriptionLink: string
@@ -381,7 +403,7 @@ export async function fetchProposalDescription(
 
   // Direct text (not a URL)
   if (!descriptionLink.startsWith("http") && !descriptionLink.startsWith("ipfs")) {
-    return descriptionLink;
+    return descriptionLink.slice(0, 5000);
   }
 
   try {
@@ -390,10 +412,27 @@ export async function fetchProposalDescription(
       url = `https://ipfs.io/ipfs/${url.slice(7)}`;
     }
 
+    // Validate URL and check against allowlist
+    const parsed = new URL(url);
+    if (parsed.protocol !== "https:") return descriptionLink;
+    if (!ALLOWED_DESCRIPTION_HOSTS.has(parsed.hostname)) {
+      // Allow any HTTPS URL but block private/internal IPs
+      if (parsed.hostname === "localhost" || parsed.hostname.startsWith("127.") || parsed.hostname.startsWith("10.") || parsed.hostname.startsWith("192.168.") || parsed.hostname.startsWith("172.") || parsed.hostname === "0.0.0.0") {
+        return descriptionLink;
+      }
+    }
+
     const res = await fetch(url, { signal: AbortSignal.timeout(5000) });
     if (!res.ok) return descriptionLink;
+
+    // Only accept text content types
+    const contentType = res.headers.get("content-type") || "";
+    if (!contentType.includes("text/") && !contentType.includes("application/json") && !contentType.includes("application/octet-stream")) {
+      return descriptionLink;
+    }
+
     const text = await res.text();
-    return text.slice(0, 5000); // Limit size
+    return text.slice(0, 5000);
   } catch {
     return descriptionLink;
   }

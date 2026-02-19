@@ -8,20 +8,23 @@ import {
   getFeaturedRealms,
   type DAOInfo,
 } from "@/lib/governance";
+import { getRegistryMap, type RegistryDAO } from "@/lib/registry";
 import { formatNumber } from "@/lib/utils";
+import DAOAvatar from "@/components/DAOAvatar";
 import { SkeletonGrid } from "@/components/Skeleton";
 import {
-  Buildings,
   Lightning,
   Users,
   MagnifyingGlass,
   Crosshair,
   Globe,
+  Buildings,
 } from "@phosphor-icons/react";
 
 export default function DashboardPage() {
   const { publicKey, connected } = useWallet();
   const [daos, setDaos] = useState<DAOInfo[]>([]);
+  const [registryMap, setRegistryMap] = useState<Map<string, RegistryDAO>>(new Map());
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
 
@@ -31,16 +34,18 @@ export default function DashboardPage() {
     async function load() {
       setLoading(true);
       try {
-        let results: DAOInfo[];
-        if (connected && publicKey) {
-          results = await getUserDAOs(publicKey);
-          if (results.length === 0) {
-            results = await getFeaturedRealms();
-          }
-        } else {
-          results = await getFeaturedRealms();
+        const [results, regMap] = await Promise.all([
+          connected && publicKey
+            ? getUserDAOs(publicKey).then((r) =>
+                r.length === 0 ? getFeaturedRealms() : r
+              )
+            : getFeaturedRealms(),
+          getRegistryMap(),
+        ]);
+        if (!cancelled) {
+          setDaos(results);
+          setRegistryMap(regMap);
         }
-        if (!cancelled) setDaos(results);
       } catch (err) {
         console.error("Failed to load DAOs:", err);
         if (!cancelled) setDaos([]);
@@ -125,7 +130,7 @@ export default function DashboardPage() {
         <>
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
             {filtered.map((dao) => (
-              <DAOCard key={dao.realmPubkey.toBase58()} dao={dao} />
+              <DAOCard key={dao.realmPubkey.toBase58()} dao={dao} registry={registryMap.get(dao.realmPubkey.toBase58())} />
             ))}
           </div>
 
@@ -144,7 +149,7 @@ export default function DashboardPage() {
   );
 }
 
-function DAOCard({ dao }: { dao: DAOInfo }) {
+function DAOCard({ dao, registry }: { dao: DAOInfo; registry?: RegistryDAO }) {
   const votingPower = dao.votingPower
     ? formatNumber(dao.votingPower / 1e6)
     : null;
@@ -153,9 +158,7 @@ function DAOCard({ dao }: { dao: DAOInfo }) {
     <Link href={`/dao/${dao.realmPubkey.toBase58()}`}>
       <div className="card-hover group rounded-xl border border-white/10 bg-white/5 p-5 backdrop-blur-sm cursor-pointer">
         <div className="mb-3 flex items-center gap-3">
-          <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-accent/10 text-accent">
-            <Buildings size={24} weight="bold" />
-          </div>
+          <DAOAvatar imageUrl={registry?.ogImage} name={dao.realm.account.name} size={40} />
           <div className="min-w-0 flex-1">
             <h3 className="text-lg font-semibold truncate">
               {dao.realm.account.name}

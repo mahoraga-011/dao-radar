@@ -12,6 +12,8 @@ import {
   type Realm,
   ProposalState,
 } from "@/lib/governance";
+import { getRegistryMap, type RegistryDAO } from "@/lib/registry";
+import DAOAvatar from "@/components/DAOAvatar";
 import { shortenAddress, timeAgo, safeToNumber } from "@/lib/utils";
 import StatusBadge from "@/components/StatusBadge";
 import { SkeletonProposalList } from "@/components/Skeleton";
@@ -24,6 +26,7 @@ export default function DAODetailPage() {
   const realmId = params.realmId as string;
 
   const [realm, setRealm] = useState<ProgramAccount<Realm> | null>(null);
+  const [registry, setRegistry] = useState<RegistryDAO | undefined>();
   const [proposals, setProposals] = useState<ProposalInfo[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -46,13 +49,19 @@ export default function DAODetailPage() {
           }
           return;
         }
-        const [realmData, proposalData] = await Promise.all([
+        const [realmData, regMap] = await Promise.all([
           getRealmInfo(realmPubkey),
-          getRealmProposals(realmPubkey),
+          getRegistryMap(),
         ]);
+        const regEntry = regMap.get(realmId);
+        const progId = regEntry?.programId
+          ? new PublicKey(regEntry.programId)
+          : undefined;
+        const proposalData = await getRealmProposals(realmPubkey, progId);
         if (!cancelled) {
           setRealm(realmData);
           setProposals(proposalData);
+          setRegistry(regEntry);
         }
       } catch (err) {
         console.error("Failed to load DAO:", err);
@@ -120,7 +129,10 @@ export default function DAODetailPage() {
 
       {realm && (
         <div className="mb-8">
-          <h1 className="text-3xl font-bold">{realm.account.name}</h1>
+          <div className="flex items-center gap-3 mb-1">
+            <DAOAvatar imageUrl={registry?.ogImage} name={realm.account.name} size={44} />
+            <h1 className="text-3xl font-bold">{realm.account.name}</h1>
+          </div>
           <p className="mt-1 text-sm text-muted">
             Community Mint: {shortenAddress(realm.account.communityMint.toBase58())}
             {realm.account.config.councilMint && (
