@@ -5,107 +5,178 @@ import Link from "next/link";
 import { PublicKey } from "@solana/web3.js";
 import { getRealms } from "@solana/spl-governance";
 import { getConnection, SPL_GOV_PROGRAM_ID } from "@/lib/governance";
+import { getRegistry, getRegistryMap, type RegistryDAO } from "@/lib/registry";
+import DAOAvatar from "@/components/DAOAvatar";
 import LoadingSpinner from "@/components/LoadingSpinner";
 import {
-  Buildings,
   MagnifyingGlass,
   CaretLeft,
   CaretRight,
   Warning,
   Globe,
+  Database,
 } from "@phosphor-icons/react";
 
-type RealmEntry = {
+type ExploreDAO = {
   pubkey: string;
   name: string;
+  ogImage?: string;
+  category?: string;
+  shortDescription?: string;
 };
 
-const CACHE_KEY = "all_realms_cache";
-const CACHE_TTL = 30 * 60 * 1000; // 30 minutes
+const ALL_REALMS_CACHE_KEY = "all_realms_cache";
+const ALL_REALMS_CACHE_TTL = 30 * 60 * 1000;
 const PAGE_SIZE = 50;
 
-function getCachedRealms(): RealmEntry[] | null {
+function getCachedAllRealms(): ExploreDAO[] | null {
   if (typeof window === "undefined") return null;
   try {
-    const cached = localStorage.getItem(CACHE_KEY);
+    const cached = localStorage.getItem(ALL_REALMS_CACHE_KEY);
     if (!cached) return null;
     const { data, timestamp } = JSON.parse(cached);
-    if (Date.now() - timestamp < CACHE_TTL) return data;
-  } catch { /* ignore */ }
+    if (Date.now() - timestamp < ALL_REALMS_CACHE_TTL) return data;
+  } catch {
+    /* ignore */
+  }
   return null;
 }
 
-function setCachedRealms(data: RealmEntry[]) {
+function setCachedAllRealms(data: ExploreDAO[]) {
   if (typeof window === "undefined") return;
   try {
-    localStorage.setItem(CACHE_KEY, JSON.stringify({ data, timestamp: Date.now() }));
-  } catch { /* ignore */ }
+    localStorage.setItem(
+      ALL_REALMS_CACHE_KEY,
+      JSON.stringify({ data, timestamp: Date.now() })
+    );
+  } catch {
+    /* ignore */
+  }
 }
 
 export default function ExplorePage() {
-  const [realms, setRealms] = useState<RealmEntry[]>([]);
+  const [registryDAOs, setRegistryDAOs] = useState<ExploreDAO[]>([]);
+  const [allDAOs, setAllDAOs] = useState<ExploreDAO[] | null>(null);
   const [loading, setLoading] = useState(true);
+  const [allLoading, setAllLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [showAll, setShowAll] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
   const [page, setPage] = useState(0);
 
+  // Load registry DAOs on mount
   useEffect(() => {
     let cancelled = false;
-
     async function load() {
       setLoading(true);
       setError(null);
+      try {
+        const registry = await getRegistry();
+        if (!cancelled) {
+          setRegistryDAOs(
+            registry
+              .map((r) => ({
+                pubkey: r.realmId,
+                name: r.displayName,
+                ogImage: r.ogImage,
+                category: r.category,
+                shortDescription: r.shortDescription,
+              }))
+              .sort((a, b) => a.name.localeCompare(b.name))
+          );
+        }
+      } catch (err) {
+        console.error("Failed to load registry:", err);
+        if (!cancelled) setError("Failed to load DAO registry.");
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    }
+    load();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
-      // Check cache first
-      const cached = getCachedRealms();
+  // Load all on-chain DAOs when toggled
+  useEffect(() => {
+    if (!showAll || allDAOs) return;
+    let cancelled = false;
+
+    async function loadAll() {
+      setAllLoading(true);
+
+      // Check cache
+      const cached = getCachedAllRealms();
       if (cached) {
         if (!cancelled) {
-          setRealms(cached);
-          setLoading(false);
+          setAllDAOs(cached);
+          setAllLoading(false);
         }
         return;
       }
 
       try {
-        const connection = getConnection();
-        const allRealms = await getRealms(connection, SPL_GOV_PROGRAM_ID);
-        const entries: RealmEntry[] = allRealms
-          .map((r) => ({
-            pubkey: r.pubkey.toBase58(),
-            name: r.account.name || "Unnamed DAO",
-          }))
+        const [allRealms, registryMap] = await Promise.all([
+          getRealms(getConnection(), SPL_GOV_PROGRAM_ID),
+          getRegistryMap(),
+        ]);
+        const entries: ExploreDAO[] = allRealms
+          .map((r) => {
+            const pk = r.pubkey.toBase58();
+            const reg = registryMap.get(pk);
+            return {
+              pubkey: pk,
+              name: reg?.displayName || r.account.name || "Unnamed DAO",
+              ogImage: reg?.ogImage,
+              category: reg?.category,
+              shortDescription: reg?.shortDescription,
+            };
+          })
           .sort((a, b) => a.name.localeCompare(b.name));
 
         if (!cancelled) {
-          setRealms(entries);
-          setCachedRealms(entries);
+          setAllDAOs(entries);
+          setCachedAllRealms(entries);
         }
       } catch (err) {
-        console.error("Failed to load realms:", err);
-        const msg = err instanceof Error && err.message.includes("timeout")
-          ? "Request timed out. The RPC may be overloaded — try again in a moment."
-          : "Failed to load DAOs. The RPC may be rate-limited — try again in a moment.";
+        console.error("Failed to load all realms:", err);
+        const msg =
+          err instanceof Error && err.message.includes("timeout")
+            ? "Request timed out. The RPC may be overloaded — try again in a moment."
+            : "Failed to load all DAOs. The RPC may be rate-limited — try again in a moment.";
         if (!cancelled) setError(msg);
       } finally {
-        if (!cancelled) setLoading(false);
+        if (!cancelled) setAllLoading(false);
       }
     }
 
-    load();
-    return () => { cancelled = true; };
-  }, []);
+    loadAll();
+    return () => {
+      cancelled = true;
+    };
+  }, [showAll, allDAOs]);
+
+  const daos = showAll && allDAOs ? allDAOs : registryDAOs;
 
   const filtered = useMemo(() => {
-    if (!searchTerm) return realms;
+    if (!searchTerm) return daos;
     const term = searchTerm.toLowerCase();
-    return realms.filter((r) => r.name.toLowerCase().includes(term));
-  }, [realms, searchTerm]);
+    return daos.filter(
+      (r) =>
+        r.name.toLowerCase().includes(term) ||
+        r.category?.toLowerCase().includes(term) ||
+        r.shortDescription?.toLowerCase().includes(term)
+    );
+  }, [daos, searchTerm]);
 
   const totalPages = Math.ceil(filtered.length / PAGE_SIZE);
   const pageRealms = filtered.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE);
 
-  // Reset page when search changes
-  useEffect(() => { setPage(0); }, [searchTerm]);
+  // Reset page when search or mode changes
+  useEffect(() => {
+    setPage(0);
+  }, [searchTerm, showAll]);
 
   return (
     <div>
@@ -113,34 +184,54 @@ export default function ExplorePage() {
         <div>
           <h1 className="text-3xl font-bold flex items-center gap-2">
             <Globe size={32} weight="bold" />
-            Explore All DAOs
+            Explore DAOs
           </h1>
           <p className="text-sm text-muted mt-1">
-            {realms.length > 0
-              ? `${realms.length.toLocaleString()} DAOs on Solana governance`
-              : "Loading all Solana governance DAOs..."}
+            {showAll && allDAOs
+              ? `${allDAOs.length.toLocaleString()} DAOs on Solana governance`
+              : registryDAOs.length > 0
+                ? `${registryDAOs.length} curated DAOs with logos & metadata`
+                : "Loading curated DAOs..."}
           </p>
         </div>
 
-        <div className="relative">
-          <MagnifyingGlass
-            size={18}
-            className="absolute left-3 top-1/2 -translate-y-1/2 text-muted"
-          />
-          <input
-            type="text"
-            placeholder="Search DAOs..."
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            className="rounded-lg border border-white/10 bg-white/5 py-2 pl-10 pr-4 text-sm text-foreground placeholder:text-muted focus:border-accent focus:outline-none w-full md:w-64"
-          />
+        <div className="flex items-center gap-3">
+          <button
+            onClick={() => setShowAll((v) => !v)}
+            className={`flex items-center gap-1.5 rounded-lg border px-3 py-2 text-sm transition-colors ${
+              showAll
+                ? "border-accent/40 bg-accent/10 text-accent"
+                : "border-white/10 bg-white/5 text-muted hover:text-foreground"
+            }`}
+          >
+            <Database size={16} />
+            {showAll ? "Showing all DAOs" : "Show all 4,000+ DAOs"}
+          </button>
+
+          <div className="relative">
+            <MagnifyingGlass
+              size={18}
+              className="absolute left-3 top-1/2 -translate-y-1/2 text-muted"
+            />
+            <input
+              type="text"
+              placeholder="Search DAOs..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="rounded-lg border border-white/10 bg-white/5 py-2 pl-10 pr-4 text-sm text-foreground placeholder:text-muted focus:border-accent focus:outline-none w-full md:w-64"
+            />
+          </div>
         </div>
       </div>
 
-      {loading ? (
+      {loading || (showAll && allLoading) ? (
         <div className="flex flex-col items-center justify-center py-24">
           <LoadingSpinner size={40} />
-          <span className="mt-3 text-muted">Loading all DAOs — this may take a moment...</span>
+          <span className="mt-3 text-muted">
+            {showAll
+              ? "Loading all DAOs — this may take a moment..."
+              : "Loading curated DAOs..."}
+          </span>
         </div>
       ) : error ? (
         <div className="flex flex-col items-center justify-center py-24">
@@ -160,7 +251,9 @@ export default function ExplorePage() {
             <div className="flex flex-col items-center justify-center py-24 text-center">
               <MagnifyingGlass size={48} className="mb-4 text-muted" />
               <p className="text-lg font-medium">No matching DAOs</p>
-              <p className="text-sm text-muted mt-1">Try a different search term</p>
+              <p className="text-sm text-muted mt-1">
+                Try a different search term
+              </p>
             </div>
           ) : (
             <>
@@ -172,11 +265,27 @@ export default function ExplorePage() {
                     className="card-hover rounded-xl border border-white/10 bg-white/5 p-4 backdrop-blur-sm"
                   >
                     <div className="flex items-center gap-3">
-                      <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-accent/10 text-accent">
-                        <Buildings size={20} weight="bold" />
+                      <DAOAvatar
+                        imageUrl={r.ogImage}
+                        name={r.name}
+                        size={36}
+                      />
+                      <div className="min-w-0 flex-1">
+                        <p className="font-medium truncate text-sm">
+                          {r.name}
+                        </p>
+                        {r.category && (
+                          <span className="text-xs text-muted">
+                            {r.category}
+                          </span>
+                        )}
                       </div>
-                      <p className="font-medium truncate text-sm">{r.name}</p>
                     </div>
+                    {r.shortDescription && (
+                      <p className="mt-2 text-xs text-muted line-clamp-2">
+                        {r.shortDescription}
+                      </p>
+                    )}
                   </Link>
                 ))}
               </div>
@@ -192,10 +301,13 @@ export default function ExplorePage() {
                     <CaretLeft size={16} /> Previous
                   </button>
                   <span className="text-sm text-muted">
-                    Page {page + 1} of {totalPages} ({filtered.length.toLocaleString()} results)
+                    Page {page + 1} of {totalPages} (
+                    {filtered.length.toLocaleString()} results)
                   </span>
                   <button
-                    onClick={() => setPage((p) => Math.min(totalPages - 1, p + 1))}
+                    onClick={() =>
+                      setPage((p) => Math.min(totalPages - 1, p + 1))
+                    }
                     disabled={page >= totalPages - 1}
                     className="flex items-center gap-1 rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm disabled:opacity-30 hover:bg-white/10 transition-colors"
                   >
