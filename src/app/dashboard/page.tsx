@@ -3,12 +3,9 @@
 import { useEffect, useState } from "react";
 import { useWallet } from "@solana/wallet-adapter-react";
 import Link from "next/link";
-import {
-  getUserDAOs,
-  getFeaturedRealms,
-  type DAOInfo,
-} from "@/lib/governance";
-import { getRegistryMap, type RegistryDAO } from "@/lib/registry";
+import { type DAOInfo } from "@/lib/governance";
+import { getRegistry, type RegistryDAO } from "@/lib/registry";
+import { useGovernance } from "@/contexts/GovernanceContext";
 import { formatNumber } from "@/lib/utils";
 import DAOAvatar from "@/components/DAOAvatar";
 import { SkeletonGrid } from "@/components/Skeleton";
@@ -16,53 +13,73 @@ import {
   Lightning,
   Users,
   MagnifyingGlass,
-  Crosshair,
   Globe,
   Buildings,
 } from "@phosphor-icons/react";
 
+// Curated subset of registry DAOs for browse mode (no RPC needed)
+const BROWSE_REALM_IDS = new Set([
+  "2Z5BXuRCJPqYUCBGyQTwAXHeJoFAnbtvoXja19aZFLKY", // Jupiter
+  "9nUyxzVL2FUMuWUiVZG66gwK15CJiM3PoLkfrnGfkvt6", // Drift
+  "3gmcbygQUUDgmtDtx41R7xSf3K4oFXrH9icPNijyq9pS", // Marinade
+  "WQa9YVA3SVspDUjmnjMj4uygJpxR814mD931FhLxLvx",  // Pyth
+  "6qGHqcZY4zLCWFvvBKfr8tHQfkD8arz8mAQPt4TDvTy5", // Helium
+  "DPiH3H3c7t47BMxqTxLsuPQpEC6Kne8GA9VXbxpnZxFE", // Mango
+  "84pGFuy1Y27ApK67ApethaPvexeDWA66zNV8gm38TVeQ", // Bonk
+  "4sgAydAiSvnpT73rALCcnYGhi5K2LrB9pJFAEbLMfrXt", // Tensor
+  "ConzwGtFktKLA2M7451S6jmW1tB3tRD9augz9zFA46Yr", // Metaplex
+  "53pMaU2DXieGxwXZLMN1rgDECwFrxuYw5u9QgEFCx4Rd", // Kamino
+  "m8BR9yA89AJ9f2u3KeAFasJSuXDnd3xYDJJkBvQ2iw6", // MonkeDAO
+  "FoVoUr6dFeXYDw2vKr76tZLkjJ8zFeVsjMruWNghtoXJ", // marginfi
+  "8msNFq5VBectsGAv66zYx5QRve1p3m6ZEz49xaWX3tbd", // Parcl
+  "5EuXAPZCpzZnqpzVRX5Ytizh9BFVtbz3H8Xk9H5onxHD", // Solend
+  "GDBJ3qv4tJXiCbz5ASkSMYq6Xfb35MdXsMzgVaMnr9Q7", // Raydium
+  "By2sVGZXwfQq6rAiAM3rNPJ9iQfb5e2QhnF4YjJ4Bip", // Grape
+  "DkSvNgykZPPFczhJVh8HDkhz25ByrDoPcB32q75AYu9k", // UXD
+  "9MwbgfEkV8ZaeycfciBqytcxwfdYHqD2NYjsTZkH4GxA", // Magic Eden
+]);
+
+interface BrowseDAO {
+  realmId: string;
+  displayName: string;
+  ogImage?: string;
+}
+
 export default function DashboardPage() {
-  const { publicKey, connected } = useWallet();
-  const [daos, setDaos] = useState<DAOInfo[]>([]);
-  const [registryMap, setRegistryMap] = useState<Map<string, RegistryDAO>>(new Map());
-  const [loading, setLoading] = useState(true);
+  const { connected } = useWallet();
+  const { userDAOs, registryMap, loading: contextLoading } = useGovernance();
+  const [browseDaos, setBrowseDaos] = useState<BrowseDAO[]>([]);
+  const [browseLoading, setBrowseLoading] = useState(!connected);
   const [searchTerm, setSearchTerm] = useState("");
 
+  // Load browse DAOs from registry when not connected (0 RPC calls)
   useEffect(() => {
-    let cancelled = false;
-
-    async function load() {
-      setLoading(true);
-      try {
-        const [results, regMap] = await Promise.all([
-          connected && publicKey
-            ? getUserDAOs(publicKey).then((r) =>
-                r.length === 0 ? getFeaturedRealms() : r
-              )
-            : getFeaturedRealms(),
-          getRegistryMap(),
-        ]);
-        if (!cancelled) {
-          setDaos(results);
-          setRegistryMap(regMap);
-        }
-      } catch (err) {
-        console.error("Failed to load DAOs:", err);
-        if (!cancelled) setDaos([]);
-      } finally {
-        if (!cancelled) setLoading(false);
-      }
+    if (connected) {
+      setBrowseDaos([]);
+      return;
     }
+    setBrowseLoading(true);
+    getRegistry()
+      .then((registry) => {
+        const curated = registry
+          .filter((d) => BROWSE_REALM_IDS.has(d.realmId))
+          .map((d) => ({ realmId: d.realmId, displayName: d.displayName, ogImage: d.ogImage }));
+        setBrowseDaos(curated);
+      })
+      .catch(() => setBrowseDaos([]))
+      .finally(() => setBrowseLoading(false));
+  }, [connected]);
 
-    load();
-    return () => {
-      cancelled = true;
-    };
-  }, [publicKey, connected]);
+  const loading = connected ? contextLoading : browseLoading;
 
-  const filtered = daos.filter((d) =>
-    d.realm.account.name.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  // Filter logic
+  const filteredDAOs = connected
+    ? userDAOs.filter((d) =>
+        d.realm.account.name.toLowerCase().includes(searchTerm.toLowerCase())
+      )
+    : browseDaos.filter((d) =>
+        d.displayName.toLowerCase().includes(searchTerm.toLowerCase())
+      );
 
   return (
     <div>
@@ -95,7 +112,7 @@ export default function DashboardPage() {
 
       {loading ? (
         <SkeletonGrid count={6} />
-      ) : filtered.length === 0 ? (
+      ) : filteredDAOs.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-24 text-center">
           {searchTerm ? (
             <>
@@ -111,27 +128,26 @@ export default function DashboardPage() {
               <p className="text-lg font-medium">No DAOs found</p>
               <p className="text-sm text-muted mt-1 max-w-md">
                 {connected
-                  ? "You don't have governance tokens deposited in any DAOs yet. Browse featured DAOs below to get started."
+                  ? "You don't have governance tokens deposited in any DAOs yet. Explore DAOs to get started."
                   : "Connect your wallet to discover the DAOs where you have voting power."}
               </p>
-              {connected && (
-                <Link
-                  href="/dashboard"
-                  className="mt-4 rounded-lg bg-accent px-4 py-2 text-sm font-medium text-white hover:bg-accent-hover transition-colors"
-                >
-                  <Crosshair size={16} className="inline mr-1.5 -mt-0.5" />
-                  Browse Featured DAOs
-                </Link>
-              )}
             </>
           )}
         </div>
       ) : (
         <>
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            {filtered.map((dao) => (
-              <DAOCard key={dao.realmPubkey.toBase58()} dao={dao} registry={registryMap.get(dao.realmPubkey.toBase58())} />
-            ))}
+            {connected
+              ? (filteredDAOs as DAOInfo[]).map((dao) => (
+                  <DAOCard
+                    key={dao.realmPubkey.toBase58()}
+                    dao={dao}
+                    registry={registryMap.get(dao.realmPubkey.toBase58())}
+                  />
+                ))
+              : (filteredDAOs as BrowseDAO[]).map((dao) => (
+                  <BrowseCard key={dao.realmId} dao={dao} />
+                ))}
           </div>
 
           <div className="mt-6 text-center">
@@ -181,6 +197,23 @@ function DAOCard({ dao, registry }: { dao: DAOInfo; registry?: RegistryDAO }) {
               <span>{votingPower} voting power</span>
             </div>
           )}
+        </div>
+      </div>
+    </Link>
+  );
+}
+
+function BrowseCard({ dao }: { dao: BrowseDAO }) {
+  return (
+    <Link href={`/dao/${dao.realmId}`}>
+      <div className="card-hover group rounded-xl border border-white/10 bg-white/5 p-5 backdrop-blur-sm cursor-pointer">
+        <div className="mb-3 flex items-center gap-3">
+          <DAOAvatar imageUrl={dao.ogImage} name={dao.displayName} size={40} />
+          <div className="min-w-0 flex-1">
+            <h3 className="text-lg font-semibold truncate">
+              {dao.displayName}
+            </h3>
+          </div>
         </div>
       </div>
     </Link>

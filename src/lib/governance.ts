@@ -3,7 +3,6 @@ import { RPC_URL } from "./rpc";
 import { safeToNumber } from "./utils";
 import {
   getRealm,
-  getRealms,
   getAllProposals,
   getTokenOwnerRecordsByOwner,
   getVoteRecordsByVoter,
@@ -57,33 +56,13 @@ export function getConnection(): Connection {
   return _connection;
 }
 
-// Well-known DAOs for browse mode (verified mainnet pubkeys)
-export const FEATURED_REALMS: { name: string; pubkey: string }[] = [
-  { name: "Jupiter Aggregator", pubkey: "2Z5BXuRCJPqYUCBGyQTwAXHeJoFAnbtvoXja19aZFLKY" },
-  { name: "Drift Protocol", pubkey: "9nUyxzVL2FUMuWUiVZG66gwK15CJiM3PoLkfrnGfkvt6" },
-  { name: "Marinade.Finance", pubkey: "3gmcbygQUUDgmtDtx41R7xSf3K4oFXrH9icPNijyq9pS" },
-  { name: "Pyth DAO", pubkey: "WQa9YVA3SVspDUjmnjMj4uygJpxR814mD931FhLxLvx" },
-  { name: "Helium", pubkey: "6qGHqcZY4zLCWFvvBKfr8tHQfkD8arz8mAQPt4TDvTy5" },
-  { name: "Mango DAO", pubkey: "DPiH3H3c7t47BMxqTxLsuPQpEC6Kne8GA9VXbxpnZxFE" },
-  { name: "Bonk DAO", pubkey: "84pGFuy1Y27ApK67ApethaPvexeDWA66zNV8gm38TVeQ" },
-  { name: "Tensor DAO", pubkey: "4sgAydAiSvnpT73rALCcnYGhi5K2LrB9pJFAEbLMfrXt" },
-  { name: "Metaplex Grants", pubkey: "ConzwGtFktKLA2M7451S6jmW1tB3tRD9augz9zFA46Yr" },
-  { name: "Kamino Finance", pubkey: "53pMaU2DXieGxwXZLMN1rgDECwFrxuYw5u9QgEFCx4Rd" },
-  { name: "MonkeDAO", pubkey: "m8BR9yA89AJ9f2u3KeAFasJSuXDnd3xYDJJkBvQ2iw6" },
-  { name: "marginfi", pubkey: "FoVoUr6dFeXYDw2vKr76tZLkjJ8zFeVsjMruWNghtoXJ" },
-  { name: "Parcl", pubkey: "8msNFq5VBectsGAv66zYx5QRve1p3m6ZEz49xaWX3tbd" },
-  { name: "Solend", pubkey: "5EuXAPZCpzZnqpzVRX5Ytizh9BFVtbz3H8Xk9H5onxHD" },
-  { name: "Raydium DAO", pubkey: "GDBJ3qv4tJXiCbz5ASkSMYq6Xfb35MdXsMzgVaMnr9Q7" },
-  { name: "Grape", pubkey: "By2sVGZXwfQq6rAiAM3rNPJ9iQfb5e2QhnF4YjJ4Bip" },
-  { name: "UXD Protocol", pubkey: "DkSvNgykZPPFczhJVh8HDkhz25ByrDoPcB32q75AYu9k" },
-  { name: "Magic Eden", pubkey: "9MwbgfEkV8ZaeycfciBqytcxwfdYHqD2NYjsTZkH4GxA" },
-];
 
 export type DAOInfo = {
   realmPubkey: PublicKey;
   realm: ProgramAccount<Realm>;
   votingPower?: number;
   activeProposals: number;
+  activeProposalSummaries: { pubkey: string; name: string }[];
   tokenOwnerRecord?: ProgramAccount<TokenOwnerRecord>;
 };
 
@@ -132,6 +111,7 @@ export async function getUserDAOs(
       }
 
       let activeProposals = 0;
+      const activeProposalSummaries: { pubkey: string; name: string }[] = [];
       try {
         const proposals = await getAllProposals(
           connection,
@@ -142,6 +122,10 @@ export async function getUserDAOs(
           for (const p of batch) {
             if (p.account.state === ProposalState.Voting) {
               activeProposals++;
+              activeProposalSummaries.push({
+                pubkey: p.pubkey.toBase58(),
+                name: p.account.name,
+              });
             }
           }
         }
@@ -154,6 +138,7 @@ export async function getUserDAOs(
         realm,
         votingPower: totalVotingPowerNum,
         activeProposals,
+        activeProposalSummaries,
         tokenOwnerRecord: primaryRecord,
       });
     }, 2);
@@ -164,81 +149,6 @@ export async function getUserDAOs(
   return results;
 }
 
-// Fetch featured realms for browse mode (with 5-min localStorage cache)
-export async function getFeaturedRealms(): Promise<DAOInfo[]> {
-  // Check localStorage cache
-  if (typeof window !== "undefined") {
-    try {
-      const cached = localStorage.getItem("featured_realms_cache");
-      if (cached) {
-        const { data, timestamp } = JSON.parse(cached);
-        if (Date.now() - timestamp < 5 * 60 * 1000) {
-          // Rehydrate from cached minimal data
-          return data.map((d: { realmPubkey: string; name: string; activeProposals: number }) => ({
-            realmPubkey: new PublicKey(d.realmPubkey),
-            realm: {
-              pubkey: new PublicKey(d.realmPubkey),
-              account: {
-                name: d.name,
-              },
-            } as ProgramAccount<Realm>,
-            activeProposals: d.activeProposals,
-          }));
-        }
-      }
-    } catch {
-      // ignore cache errors
-    }
-  }
-
-  const connection = getConnection();
-  const results: DAOInfo[] = [];
-
-  await pMap(FEATURED_REALMS, async ({ pubkey }) => {
-    const realmPubkey = new PublicKey(pubkey);
-    const realm = await getRealm(connection, realmPubkey);
-
-    let activeProposals = 0;
-    try {
-      const proposals = await getAllProposals(
-        connection,
-        SPL_GOV_PROGRAM_ID,
-        realmPubkey
-      );
-      for (const batch of proposals) {
-        for (const p of batch) {
-          if (p.account.state === ProposalState.Voting) {
-            activeProposals++;
-          }
-        }
-      }
-    } catch {
-      // skip
-    }
-
-    results.push({
-      realmPubkey,
-      realm,
-      activeProposals,
-    });
-  }, 2);
-
-  // Cache to localStorage
-  if (typeof window !== "undefined" && results.length > 0) {
-    try {
-      const cacheData = results.map((d) => ({
-        realmPubkey: d.realmPubkey.toBase58(),
-        name: d.realm.account.name,
-        activeProposals: d.activeProposals,
-      }));
-      localStorage.setItem("featured_realms_cache", JSON.stringify({ data: cacheData, timestamp: Date.now() }));
-    } catch {
-      // ignore
-    }
-  }
-
-  return results;
-}
 
 // Get all proposals for a realm
 export async function getRealmProposals(

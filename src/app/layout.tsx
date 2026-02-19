@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Plus_Jakarta_Sans, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import WalletProvider from "@/components/WalletProvider";
+import { GovernanceProvider } from "@/contexts/GovernanceContext";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
 
@@ -51,11 +52,13 @@ export default function RootLayout({
         className={`${plusJakarta.variable} ${geistMono.variable} antialiased min-h-screen flex flex-col`}
       >
         <WalletProvider>
-          <Navbar />
-          <main className="mx-auto w-full max-w-7xl flex-1 px-4 py-8 animate-page-fade-in">
-            {children}
-          </main>
-          <Footer />
+          <GovernanceProvider>
+            <Navbar />
+            <main className="mx-auto w-full max-w-7xl flex-1 px-4 py-8 animate-page-fade-in">
+              {children}
+            </main>
+            <Footer />
+          </GovernanceProvider>
         </WalletProvider>
       </body>
     </html>

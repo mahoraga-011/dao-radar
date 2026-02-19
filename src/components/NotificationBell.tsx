@@ -4,15 +4,12 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import { useWallet } from "@solana/wallet-adapter-react";
 import Link from "next/link";
 import { Bell, Lightning, X } from "@phosphor-icons/react";
-import { FEATURED_REALMS } from "@/lib/governance";
-import { ProposalState } from "@solana/spl-governance";
+import { useGovernance } from "@/contexts/GovernanceContext";
 import {
   requestNotificationPermission,
   notifyNewProposals,
   type ActiveProposalAlert,
 } from "@/lib/notifications";
-import { getAllProposals, getTokenOwnerRecordsByOwner } from "@solana/spl-governance";
-import { getConnection, SPL_GOV_PROGRAM_ID, getRealmInfo } from "@/lib/governance";
 
 interface ProposalNotif {
   proposalId: string;
@@ -23,100 +20,67 @@ interface ProposalNotif {
 }
 
 export default function NotificationBell() {
-  const { publicKey, connected } = useWallet();
+  const { connected } = useWallet();
+  const { userDAOs, loading, refresh } = useGovernance();
   const [notifications, setNotifications] = useState<ProposalNotif[]>([]);
   const [isOpen, setIsOpen] = useState(false);
-  const [loading, setLoading] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
-  const fetchNotifications = useCallback(async () => {
-    if (!publicKey || !connected) {
+  // Derive notifications from context's userDAOs (no independent RPC)
+  const syncNotifications = useCallback(() => {
+    if (!connected || userDAOs.length === 0) {
       setNotifications([]);
       return;
     }
 
-    setLoading(true);
-    try {
-      const connection = getConnection();
+    const allActive: ProposalNotif[] = [];
+    const alertBatch: ActiveProposalAlert[] = [];
 
-      // Get realm pubkeys from user's token owner records
-      const tokenOwnerRecords = await getTokenOwnerRecordsByOwner(
-        connection,
-        SPL_GOV_PROGRAM_ID,
-        publicKey
-      );
-      const userRealmPks = [...new Set(tokenOwnerRecords.map((t) => t.account.realm.toBase58()))];
+    for (const dao of userDAOs) {
+      const realmId = dao.realmPubkey.toBase58();
+      const daoName = dao.realm.account.name;
 
-      // Fall back to featured realms if user has no DAOs
-      const realmPks = userRealmPks.length > 0
-        ? userRealmPks
-        : FEATURED_REALMS.map((r) => r.pubkey);
-
-      const allActive: ProposalNotif[] = [];
-      const alertBatch: ActiveProposalAlert[] = [];
-
-      await Promise.allSettled(
-        realmPks.map(async (realmPk) => {
-          try {
-            const realmPubkey = new (await import("@solana/web3.js")).PublicKey(realmPk);
-            const [realm, proposals] = await Promise.all([
-              getRealmInfo(realmPubkey),
-              getAllProposals(connection, SPL_GOV_PROGRAM_ID, realmPubkey),
-            ]);
-
-            for (const batch of proposals) {
-              for (const p of batch) {
-                if (p.account.state === ProposalState.Voting) {
-                  const item = {
-                    proposalId: p.pubkey.toBase58(),
-                    proposalName: p.account.name,
-                    daoName: realm.account.name,
-                    realmId: realmPk,
-                  };
-                  allActive.push({ ...item, isNew: false });
-                  alertBatch.push(item);
-                }
-              }
-            }
-          } catch {
-            // Skip failed DAOs
-          }
-        })
-      );
-
-      // Check which are new and send browser notifications
-      const newOnes = notifyNewProposals(alertBatch);
-      const newIds = new Set(newOnes.map((n) => n.proposalId));
-
-      setNotifications(
-        allActive.map((n) => ({
-          ...n,
-          isNew: newIds.has(n.proposalId),
-        }))
-      );
-    } catch (err) {
-      console.error("Failed to fetch notifications:", err);
-    } finally {
-      setLoading(false);
+      for (const p of dao.activeProposalSummaries) {
+        const item = {
+          proposalId: p.pubkey,
+          proposalName: p.name,
+          daoName,
+          realmId,
+        };
+        allActive.push({ ...item, isNew: false });
+        alertBatch.push(item);
+      }
     }
-  }, [publicKey, connected]);
 
-  // Fetch on wallet connect + request permission
+    const newOnes = notifyNewProposals(alertBatch);
+    const newIds = new Set(newOnes.map((n) => n.proposalId));
+
+    setNotifications(
+      allActive.map((n) => ({
+        ...n,
+        isNew: newIds.has(n.proposalId),
+      }))
+    );
+  }, [connected, userDAOs]);
+
+  // Sync whenever userDAOs changes
   useEffect(() => {
-    if (connected && publicKey) {
-      requestNotificationPermission();
-      fetchNotifications();
-    } else {
-      setNotifications([]);
-    }
-  }, [connected, publicKey, fetchNotifications]);
+    syncNotifications();
+  }, [syncNotifications]);
 
-  // Poll once per day (proposals last days/weeks, no need for frequent polling)
+  // Request notification permission on connect
+  useEffect(() => {
+    if (connected) {
+      requestNotificationPermission();
+    }
+  }, [connected]);
+
+  // Poll once per day via context refresh
   useEffect(() => {
     if (!connected) return;
-    const interval = setInterval(fetchNotifications, 24 * 60 * 60 * 1000);
+    const interval = setInterval(() => { refresh(); }, 24 * 60 * 60 * 1000);
     return () => clearInterval(interval);
-  }, [connected, fetchNotifications]);
+  }, [connected, refresh]);
 
   // Close dropdown on outside click
   useEffect(() => {
@@ -132,7 +96,6 @@ export default function NotificationBell() {
   if (!connected) return null;
 
   const activeCount = notifications.length;
-  const newCount = notifications.filter((n) => n.isNew).length;
 
   return (
     <div className="relative" ref={dropdownRef}>
