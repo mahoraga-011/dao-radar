@@ -9,7 +9,7 @@ import { WalletModalProvider } from "@solana/wallet-adapter-react-ui";
 import { PhantomWalletAdapter, SolflareWalletAdapter } from "@solana/wallet-adapter-wallets";
 
 import "@solana/wallet-adapter-react-ui/styles.css";
-import { RPC_URL } from "@/lib/rpc";
+import { RPC_ENDPOINT } from "@/lib/rpc";
 
 export default function WalletProvider({ children }: { children: ReactNode }) {
   const wallets = useMemo(
@@ -18,7 +18,7 @@ export default function WalletProvider({ children }: { children: ReactNode }) {
   );
 
   return (
-    <ConnectionProvider endpoint={RPC_URL}>
+    <ConnectionProvider endpoint={RPC_ENDPOINT}>
       <SolanaWalletProvider wallets={wallets} autoConnect>
         <WalletModalProvider>{children}</WalletModalProvider>
       </SolanaWalletProvider>

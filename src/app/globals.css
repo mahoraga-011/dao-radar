@@ -224,11 +224,59 @@ body {
   animation: vote-bar-fill 0.8s ease-out forwards;
 }
 
+/* Hero radar: smaller, ambient */
+.radar-container-hero {
+  width: 280px;
+  height: 280px;
+}
+
+/* Floating labels around radar */
+@keyframes float-drift {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-6px); }
+}
+
+@keyframes float-drift-alt {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(5px); }
+}
+
+.floating-label {
+  animation: float-drift 4s ease-in-out infinite;
+}
+
+.floating-label-alt {
+  animation: float-drift-alt 5s ease-in-out infinite;
+}
+
+/* Hero background grid */
+.hero-grid-bg {
+  position: absolute;
+  inset: 0;
+  background-image:
+    linear-gradient(rgba(239, 68, 68, 0.03) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(239, 68, 68, 0.03) 1px, transparent 1px);
+  background-size: 60px 60px;
+  mask-image: radial-gradient(ellipse 70% 60% at 70% 50%, black 20%, transparent 70%);
+  -webkit-mask-image: radial-gradient(ellipse 70% 60% at 70% 50%, black 20%, transparent 70%);
+}
+
 /* Mobile radar scale */
 @media (max-width: 640px) {
   .radar-container {
     width: 220px;
     height: 220px;
+  }
+  .radar-container-hero {
+    width: 200px;
+    height: 200px;
+  }
+}
+
+@media (min-width: 1024px) {
+  .radar-container-hero {
+    width: 300px;
+    height: 300px;
   }
 }
 

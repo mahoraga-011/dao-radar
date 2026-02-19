@@ -35,8 +35,8 @@ pnpm install
 # Set up environment variables
 cp .env.example .env.local
 # Edit .env.local with your keys:
-#   NEXT_PUBLIC_SOLANA_RPC_URL=https://mainnet.helius-rpc.com/?api-key=YOUR_KEY
-#   GROQ_API_KEY=your_groq_api_key
+#   SOLANA_RPC_URL=https://mainnet.helius-rpc.com/?api-key=YOUR_KEY
+#   OPENAI_API_KEY=your_openai_api_key
 
 # Run development server
 pnpm dev
@@ -51,8 +51,8 @@ Open [http://localhost:3000](http://localhost:3000) to see the app.
 
 | Variable | Description |
 |----------|-------------|
-| `NEXT_PUBLIC_SOLANA_RPC_URL` | Solana RPC endpoint (Helius recommended) |
-| `GROQ_API_KEY` | Groq API key for AI summaries |
+| `SOLANA_RPC_URL` | Solana RPC endpoint — server-side only, proxied via `/api/rpc` |
+| `OPENAI_API_KEY` | OpenAI API key for AI proposal summaries |
 
 ## Deployment
 
