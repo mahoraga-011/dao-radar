@@ -12,16 +12,23 @@ import {
   buildCastVoteIx,
   getConnection,
   getVoterTokenOwnerRecord,
+  getExistingVoteRecord,
+  getVoteLabel,
+  parseVoteError,
+  getTokenDecimals,
   ProposalState,
+  VoteKind,
   type ProgramAccount,
   type Proposal,
   type Realm,
   type TokenOwnerRecord,
+  type VoteRecord,
 } from "@/lib/governance";
 import { summarizeProposal } from "@/lib/ai-summary";
 import { shortenAddress, timeAgo, formatNumber, safeToNumber } from "@/lib/utils";
 import StatusBadge from "@/components/StatusBadge";
 import LoadingSpinner from "@/components/LoadingSpinner";
+import VoteConfirmDialog from "@/components/VoteConfirmDialog";
 import Markdown from "react-markdown";
 import rehypeSanitize from "rehype-sanitize";
 import {
@@ -50,6 +57,9 @@ export default function ProposalDetailPage() {
   const [loading, setLoading] = useState(true);
   const [voterRecord, setVoterRecord] = useState<ProgramAccount<TokenOwnerRecord> | null>(null);
   const [noVotingPower, setNoVotingPower] = useState(false);
+  const [existingVote, setExistingVote] = useState<ProgramAccount<VoteRecord> | null>(null);
+  const [tokenDecimals, setTokenDecimals] = useState(6);
+  const [pendingVote, setPendingVote] = useState<"approve" | "deny" | "abstain" | null>(null);
   const [voting, setVoting] = useState(false);
   const [voteResult, setVoteResult] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -72,6 +82,12 @@ export default function ProposalDetailPage() {
         const proposalData = await getProposalDetail(proposalPubkey);
         if (cancelled) return;
         setProposal(proposalData);
+
+        // Fetch token decimals for accurate vote display
+        try {
+          const decimals = await getTokenDecimals(proposalData.account.governingTokenMint);
+          if (!cancelled) setTokenDecimals(decimals);
+        } catch { /* fallback to 6 */ }
 
         if (realmId) {
           try {
@@ -97,17 +113,17 @@ export default function ProposalDetailPage() {
     return () => { cancelled = true; };
   }, [proposalId, realmId]);
 
-  // Fetch voter's TokenOwnerRecord when wallet is connected
+  // Fetch voter's TokenOwnerRecord and existing vote when wallet is connected
   useEffect(() => {
     let cancelled = false;
 
     async function loadVoterRecord() {
-      if (!publicKey || !realmId || !realm) return;
+      if (!publicKey || !realmId || !realm || !proposal) return;
 
       setNoVotingPower(false);
+      setExistingVote(null);
       try {
-        // Use the proposal's governing token mint (supports both community and council mints)
-        const mint = proposal ? proposal.account.governingTokenMint : realm.account.communityMint;
+        const mint = proposal.account.governingTokenMint;
         const record = await getVoterTokenOwnerRecord(
           new PublicKey(realmId),
           mint,
@@ -116,6 +132,9 @@ export default function ProposalDetailPage() {
         if (!cancelled) {
           if (record) {
             setVoterRecord(record);
+            // Check if user already voted on this proposal
+            const voteRecord = await getExistingVoteRecord(proposal.pubkey, record.pubkey);
+            if (!cancelled) setExistingVote(voteRecord);
           } else {
             setNoVotingPower(true);
           }
@@ -179,9 +198,20 @@ export default function ProposalDetailPage() {
       await connection.confirmTransaction(sig);
 
       setVoteResult(`Vote submitted! Signature: ${shortenAddress(sig, 8)}`);
+
+      // Refresh proposal data to update vote counts
+      try {
+        const updated = await getProposalDetail(proposal.pubkey);
+        setProposal(updated);
+      } catch { /* ignore refresh failure */ }
+
+      // Refresh existing vote record
+      try {
+        const voteRecord = await getExistingVoteRecord(proposal.pubkey, voterRecord.pubkey);
+        setExistingVote(voteRecord);
+      } catch { /* ignore */ }
     } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : "Unknown error";
-      setVoteResult(`Vote failed: ${message}`);
+      setVoteResult(`Vote failed: ${parseVoteError(err)}`);
     } finally {
       setVoting(false);
     }
@@ -222,7 +252,7 @@ export default function ProposalDetailPage() {
   }
 
   const p = proposal.account;
-  // TODO: fetch actual token decimals — most major Solana governance tokens use 6 decimals
+  const divisor = Math.pow(10, tokenDecimals);
   const yesVotes = p.options?.[0]?.voteWeight ? safeToNumber(p.options[0].voteWeight) : 0;
   const noVotes = p.denyVoteWeight ? safeToNumber(p.denyVoteWeight) : 0;
   const abstainVotes = p.abstainVoteWeight ? safeToNumber(p.abstainVoteWeight) : 0;
@@ -299,20 +329,21 @@ export default function ProposalDetailPage() {
         <h2 className="font-semibold mb-4">Vote Results</h2>
 
         <div className="space-y-3">
-          <VoteBarRow label="For" count={yesVotes} percent={yesPercent} color="bg-green-400" />
-          <VoteBarRow label="Against" count={noVotes} percent={noPercent} color="bg-red-400" />
+          <VoteBarRow label="For" count={yesVotes} percent={yesPercent} color="bg-green-400" divisor={divisor} />
+          <VoteBarRow label="Against" count={noVotes} percent={noPercent} color="bg-red-400" divisor={divisor} />
           {abstainVotes > 0 && (
             <VoteBarRow
               label="Abstain"
               count={abstainVotes}
               percent={totalVotes > 0 ? (abstainVotes / totalVotes) * 100 : 0}
               color="bg-gray-400"
+              divisor={divisor}
             />
           )}
         </div>
 
         <p className="mt-3 text-xs text-muted">
-          Total votes: {formatNumber(totalVotes / 1e6)}
+          Total votes: {formatNumber(totalVotes / divisor)}
         </p>
       </div>
 
@@ -335,11 +366,31 @@ export default function ProposalDetailPage() {
               <LoadingSpinner size={16} />
               Loading your voting record...
             </div>
+          ) : existingVote ? (
+            <div className="flex items-center gap-3 rounded-lg bg-white/5 border border-white/10 p-4">
+              {existingVote.account.vote?.voteType === VoteKind.Approve ? (
+                <ThumbsUp size={24} weight="bold" className="text-green-400" />
+              ) : existingVote.account.vote?.voteType === VoteKind.Deny ? (
+                <ThumbsDown size={24} weight="bold" className="text-red-400" />
+              ) : (
+                <MinusCircle size={24} weight="bold" className="text-gray-400" />
+              )}
+              <div>
+                <p className="text-sm font-medium">
+                  You voted <span className={
+                    existingVote.account.vote?.voteType === VoteKind.Approve ? "text-green-400" :
+                    existingVote.account.vote?.voteType === VoteKind.Deny ? "text-red-400" :
+                    "text-gray-400"
+                  }>{getVoteLabel(existingVote.account.vote)}</span> on this proposal
+                </p>
+                <p className="text-xs text-muted mt-0.5">Votes cannot be changed after submission</p>
+              </div>
+            </div>
           ) : (
             <>
               <div className="flex gap-3">
                 <button
-                  onClick={() => handleVote("approve")}
+                  onClick={() => setPendingVote("approve")}
                   disabled={voting}
                   className="flex-1 flex items-center justify-center gap-2 rounded-lg bg-green-500/20 border border-green-500/30 py-3 font-medium text-green-400 hover:bg-green-500/30 transition-colors disabled:opacity-50"
                 >
@@ -347,7 +398,7 @@ export default function ProposalDetailPage() {
                   For
                 </button>
                 <button
-                  onClick={() => handleVote("deny")}
+                  onClick={() => setPendingVote("deny")}
                   disabled={voting}
                   className="flex-1 flex items-center justify-center gap-2 rounded-lg bg-red-500/20 border border-red-500/30 py-3 font-medium text-red-400 hover:bg-red-500/30 transition-colors disabled:opacity-50"
                 >
@@ -355,7 +406,7 @@ export default function ProposalDetailPage() {
                   Against
                 </button>
                 <button
-                  onClick={() => handleVote("abstain")}
+                  onClick={() => setPendingVote("abstain")}
                   disabled={voting}
                   className="flex-1 flex items-center justify-center gap-2 rounded-lg bg-gray-500/20 border border-gray-500/30 py-3 font-medium text-gray-400 hover:bg-gray-500/30 transition-colors disabled:opacity-50"
                 >
@@ -376,6 +427,15 @@ export default function ProposalDetailPage() {
                   {voteResult.includes("failed") ? <Warning size={16} /> : <CheckCircle size={16} />}
                   {voteResult}
                 </div>
+              )}
+
+              {pendingVote && (
+                <VoteConfirmDialog
+                  proposalName={p.name}
+                  voteType={pendingVote}
+                  onConfirm={() => { setPendingVote(null); handleVote(pendingVote); }}
+                  onCancel={() => setPendingVote(null)}
+                />
               )}
             </>
           )}
@@ -400,18 +460,20 @@ function VoteBarRow({
   count,
   percent,
   color,
+  divisor,
 }: {
   label: string;
   count: number;
   percent: number;
   color: string;
+  divisor: number;
 }) {
   return (
     <div>
       <div className="flex justify-between text-sm mb-1">
         <span>{label}</span>
         <span className="text-muted">
-          {formatNumber(count / 1e6)} ({percent.toFixed(1)}%)
+          {formatNumber(count / divisor)} ({percent.toFixed(1)}%)
         </span>
       </div>
       <div className="h-2 w-full rounded-full bg-white/10 overflow-hidden">
