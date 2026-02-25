@@ -4,8 +4,6 @@
 
 > Scan every DAO you belong to. AI-powered proposal intelligence. One-click voting across all your Solana DAOs.
 
-![DAO Radar](public/og-image.png)
-
 ## Features
 
 - **DAO Discovery** — Auto-detect all DAOs where you hold governance tokens
@@ -72,7 +70,7 @@ src/
 
 - **`/api/rpc`** — RPC proxy with token bucket rate limiter (100 burst, 50/s refill), method whitelist, IP-based tracking
 - **`/api/summarize`** — AI proposal summaries with rate limiting (10/min per IP) and prompt injection sanitization
-- **`/api/registry`** — DAO registry from solana-labs/governance-ui with ISR (1-hour revalidation)
+- **`/api/registry`** — DAO registry from Mythic-Project/governance-ui with ISR (1-hour revalidation)
 
 ## Getting Started
 
@@ -106,7 +104,7 @@ Deployed on [Vercel](https://dao-radar.vercel.app). Works out of the box with Ve
 
 ## Network
 
-Configured for **Solana mainnet-beta**. The SPL Governance program ID (`GovER5Lthms3bLBqWub97yVrMmEogzX7xNjdXpPPCVZw`) and all RPC endpoints point to mainnet. The DAO registry is sourced from the official [governance-ui mainnet-beta registry](https://github.com/solana-labs/governance-ui).
+Configured for **Solana mainnet-beta**. The SPL Governance program ID (`GovER5Lthms3bLBqWub97yVrMmEogzX7xNjdXpPPCVZw`) and all RPC endpoints point to mainnet. The DAO registry is sourced from the official [governance-ui mainnet-beta registry](https://github.com/Mythic-Project/governance-ui/blob/master/public/realms/mainnet-beta.json).
 
 ---
 
