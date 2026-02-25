@@ -171,9 +171,17 @@ body {
 /* Wallet adapter overrides */
 .wallet-adapter-button {
   background-color: #ef4444 !important;
+  border: 1px solid transparent !important;
   border-radius: 8px !important;
-  font-size: 14px !important;
-  height: 40px !important;
+  box-sizing: border-box !important;
+  font-family: var(--font-plus-jakarta), sans-serif !important;
+  font-size: 16px !important;
+  font-weight: 600 !important;
+  height: 50px !important;
+  padding: 0 28px !important;
+  line-height: 1 !important;
+  min-width: 200px !important;
+  justify-content: center !important;
 }
 
 .wallet-adapter-button:hover {

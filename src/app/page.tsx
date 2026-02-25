@@ -96,7 +96,7 @@ export default function LandingPage() {
               )}
               <Link
                 href="/explore"
-                className="inline-flex items-center gap-2 rounded-lg border border-white/10 bg-white/5 px-7 py-3.5 font-semibold text-foreground hover:bg-white/10 hover:border-white/20 transition-all"
+                className="inline-flex items-center justify-center gap-2 rounded-lg border border-white/10 bg-white/5 px-7 h-[50px] min-w-[200px] font-semibold text-foreground hover:bg-white/10 hover:border-white/20 transition-all box-border"
               >
                 Explore DAOs
               </Link>
