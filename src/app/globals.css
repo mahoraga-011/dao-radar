@@ -168,19 +168,26 @@ body {
   z-index: 1;
 }
 
-/* Wallet adapter overrides */
+/* Wallet adapter overrides — default (navbar) size */
 .wallet-adapter-button {
   background-color: #ef4444 !important;
-  border: 1px solid transparent !important;
   border-radius: 8px !important;
   box-sizing: border-box !important;
   font-family: var(--font-plus-jakarta), sans-serif !important;
-  font-size: 16px !important;
+  font-size: 14px !important;
   font-weight: 600 !important;
+  height: 40px !important;
+  padding: 0 20px !important;
+  line-height: 1 !important;
+}
+
+/* Larger wallet button for landing page CTAs */
+.wallet-button-lg .wallet-adapter-button {
+  font-size: 16px !important;
   height: 50px !important;
   padding: 0 28px !important;
-  line-height: 1 !important;
   min-width: 200px !important;
+  border: 1px solid transparent !important;
   justify-content: center !important;
 }
 

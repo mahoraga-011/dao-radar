@@ -92,7 +92,7 @@ export default function LandingPage() {
                   <ArrowRight size={18} weight="bold" className="group-hover:translate-x-1 transition-transform" />
                 </Link>
               ) : (
-                <WalletMultiButton />
+                <span className="wallet-button-lg"><WalletMultiButton /></span>
               )}
               <Link
                 href="/explore"
@@ -280,7 +280,7 @@ export default function LandingPage() {
                 <ArrowRight size={18} weight="bold" className="group-hover:translate-x-1 transition-transform" />
               </Link>
             ) : (
-              <WalletMultiButton />
+              <span className="wallet-button-lg"><WalletMultiButton /></span>
             )}
             <Link
               href="/explore"
