@@ -3,27 +3,39 @@
 import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
-import { PublicKey } from "@solana/web3.js";
+import { PublicKey, Transaction } from "@solana/web3.js";
+import { useWallet } from "@solana/wallet-adapter-react";
 import {
   getRealmInfo,
   getRealmProposals,
+  getVoterTokenOwnerRecord,
+  getExistingVoteRecord,
+  buildCastVoteIx,
+  getConnection,
+  parseVoteError,
   type ProposalInfo,
   type ProgramAccount,
   type Realm,
+  type TokenOwnerRecord,
+  type VoteRecord,
   ProposalState,
+  VoteKind,
 } from "@/lib/governance";
 import { getRegistryMap, type RegistryDAO } from "@/lib/registry";
 import DAOAvatar from "@/components/DAOAvatar";
+import LoadingSpinner from "@/components/LoadingSpinner";
 import { shortenAddress, timeAgo, safeToNumber } from "@/lib/utils";
 import StatusBadge from "@/components/StatusBadge";
 import { SkeletonProposalList } from "@/components/Skeleton";
-import { ArrowLeft, FileText, Funnel, Warning } from "@phosphor-icons/react";
+import VoteConfirmDialog from "@/components/VoteConfirmDialog";
+import { ArrowLeft, FileText, Funnel, Warning, ThumbsUp, ThumbsDown, MinusCircle, CheckCircle } from "@phosphor-icons/react";
 
 type FilterType = "all" | "active" | "completed" | "defeated";
 
 export default function DAODetailPage() {
   const params = useParams();
   const realmId = params.realmId as string;
+  const { publicKey, signTransaction, connected } = useWallet();
 
   const [realm, setRealm] = useState<ProgramAccount<Realm> | null>(null);
   const [registry, setRegistry] = useState<RegistryDAO | undefined>();
@@ -31,6 +43,8 @@ export default function DAODetailPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [filter, setFilter] = useState<FilterType>("all");
+  const [voterRecord, setVoterRecord] = useState<ProgramAccount<TokenOwnerRecord> | null>(null);
+  const [existingVotes, setExistingVotes] = useState<Map<string, ProgramAccount<VoteRecord>>>(new Map());
 
   useEffect(() => {
     let cancelled = false;
@@ -74,6 +88,94 @@ export default function DAODetailPage() {
     load();
     return () => { cancelled = true; };
   }, [realmId]);
+
+  // Fetch voter record when wallet is connected and realm is loaded
+  useEffect(() => {
+    let cancelled = false;
+    async function loadVoterData() {
+      if (!publicKey || !realm) return;
+      try {
+        const record = await getVoterTokenOwnerRecord(
+          new PublicKey(realmId),
+          realm.account.communityMint,
+          publicKey
+        );
+        if (cancelled) return;
+        setVoterRecord(record);
+
+        // Check existing votes for active proposals
+        if (record) {
+          const activeProposals = proposals.filter((p) => p.proposal.state === ProposalState.Voting);
+          const votes = new Map<string, ProgramAccount<VoteRecord>>();
+          for (const p of activeProposals) {
+            try {
+              const vr = await getExistingVoteRecord(p.pubkey, record.pubkey);
+              if (vr && !cancelled) votes.set(p.pubkey.toBase58(), vr);
+            } catch { /* skip */ }
+          }
+          if (!cancelled) setExistingVotes(votes);
+        }
+      } catch { /* skip */ }
+    }
+    loadVoterData();
+    return () => { cancelled = true; };
+  }, [publicKey, realm, realmId, proposals]);
+
+  const handleInlineVote = async (
+    proposalInfo: ProposalInfo,
+    voteType: "approve" | "deny" | "abstain"
+  ) => {
+    if (!publicKey || !signTransaction || !voterRecord || !realm) return;
+    const proposalKey = proposalInfo.pubkey.toBase58();
+
+    // Optimistic update: immediately mark as voted to prevent double-clicks
+    const optimisticVote = {
+      pubkey: proposalInfo.pubkey,
+      account: { vote: { voteType: voteType === "approve" ? VoteKind.Approve : voteType === "deny" ? VoteKind.Deny : VoteKind.Abstain } },
+    } as ProgramAccount<VoteRecord>;
+    setExistingVotes((prev) => new Map(prev).set(proposalKey, optimisticVote));
+
+    try {
+      const p = proposalInfo.proposal;
+      const instructions = await buildCastVoteIx({
+        realm: new PublicKey(realmId),
+        governance: p.governance,
+        proposal: proposalInfo.pubkey,
+        proposalOwnerRecord: p.tokenOwnerRecord,
+        voterTokenOwnerRecord: voterRecord.pubkey,
+        governanceAuthority: publicKey,
+        governingTokenMint: p.governingTokenMint,
+        payer: publicKey,
+        voteType,
+      });
+
+      const connection = getConnection();
+      const tx = new Transaction();
+      tx.add(...instructions);
+      tx.feePayer = publicKey;
+      tx.recentBlockhash = (await connection.getLatestBlockhash()).blockhash;
+
+      const signed = await signTransaction(tx);
+      const sig = await connection.sendRawTransaction(signed.serialize());
+      await connection.confirmTransaction(sig);
+
+      // Refresh with real vote record from chain
+      try {
+        const vr = await getExistingVoteRecord(proposalInfo.pubkey, voterRecord.pubkey);
+        if (vr) setExistingVotes((prev) => new Map(prev).set(proposalKey, vr));
+      } catch { /* optimistic update stays */ }
+
+      return { success: true, sig };
+    } catch (err) {
+      // Rollback optimistic update on failure
+      setExistingVotes((prev) => {
+        const next = new Map(prev);
+        next.delete(proposalKey);
+        return next;
+      });
+      return { success: false, error: parseVoteError(err) };
+    }
+  };
 
   const filtered = proposals.filter((p) => {
     switch (filter) {
@@ -173,7 +275,14 @@ export default function DAODetailPage() {
       ) : (
         <div className="space-y-3">
           {filtered.map((p) => (
-            <ProposalRow key={p.pubkey.toBase58()} proposal={p} realmId={realmId} />
+            <ProposalRow
+              key={p.pubkey.toBase58()}
+              proposal={p}
+              realmId={realmId}
+              canVote={connected && !!voterRecord && !existingVotes.has(p.pubkey.toBase58())}
+              existingVote={existingVotes.get(p.pubkey.toBase58()) ?? null}
+              onVote={handleInlineVote}
+            />
           ))}
         </div>
       )}
@@ -181,25 +290,126 @@ export default function DAODetailPage() {
   );
 }
 
-function ProposalRow({ proposal, realmId }: { proposal: ProposalInfo; realmId: string }) {
+function ProposalRow({
+  proposal,
+  realmId,
+  canVote,
+  existingVote,
+  onVote,
+}: {
+  proposal: ProposalInfo;
+  realmId: string;
+  canVote: boolean;
+  existingVote: ProgramAccount<VoteRecord> | null;
+  onVote: (p: ProposalInfo, voteType: "approve" | "deny" | "abstain") => Promise<{ success: boolean; sig?: string; error?: string } | undefined>;
+}) {
   const p = proposal.proposal;
   const timestamp = p.votingAt ? safeToNumber(p.votingAt) : safeToNumber(p.draftAt);
+  const isActive = p.state === ProposalState.Voting;
+  const [voting, setVoting] = useState(false);
+  const [inlineResult, setInlineResult] = useState<{ success: boolean; message: string } | null>(null);
+  const [pendingVote, setPendingVote] = useState<"approve" | "deny" | "abstain" | null>(null);
+
+  const handleClick = (e: React.MouseEvent, voteType: "approve" | "deny" | "abstain") => {
+    e.preventDefault();
+    e.stopPropagation();
+    setPendingVote(voteType);
+  };
+
+  const confirmVote = async () => {
+    if (!pendingVote) return;
+    const voteType = pendingVote;
+    setPendingVote(null);
+    setVoting(true);
+    setInlineResult(null);
+    const result = await onVote(proposal, voteType);
+    setVoting(false);
+    if (result?.success) {
+      setInlineResult({ success: true, message: "Vote submitted!" });
+    } else if (result?.error) {
+      setInlineResult({ success: false, message: result.error });
+    }
+  };
 
   return (
     <Link href={`/proposal/${proposal.pubkey.toBase58()}?realm=${realmId}`}>
-      <div className="group flex items-center justify-between rounded-xl border border-white/10 bg-white/5 p-4 transition-all hover:border-accent/30 hover:bg-white/[0.07] cursor-pointer">
-        <div className="min-w-0 flex-1">
-          <div className="flex items-center gap-2 mb-1">
-            <StatusBadge state={p.state} />
-            <span className="text-xs text-muted">{timeAgo(timestamp)}</span>
+      <div className="group rounded-xl border border-white/10 bg-white/5 p-4 transition-all hover:border-accent/30 hover:bg-white/[0.07] cursor-pointer">
+        <div className="flex items-center justify-between">
+          <div className="min-w-0 flex-1">
+            <div className="flex items-center gap-2 mb-1">
+              <StatusBadge state={p.state} />
+              <span className="text-xs text-muted">{timeAgo(timestamp)}</span>
+            </div>
+            <h3 className="font-medium truncate">{p.name}</h3>
           </div>
-          <h3 className="font-medium truncate">{p.name}</h3>
+
+          {isActive && (
+            <div className="ml-4 flex-shrink-0">
+              <VoteBar proposal={p} />
+            </div>
+          )}
         </div>
 
-        {p.state === ProposalState.Voting && (
-          <div className="ml-4 flex-shrink-0">
-            <VoteBar proposal={p} />
+        {/* Inline vote buttons for active proposals */}
+        {isActive && (
+          <div className="mt-3 flex items-center gap-2">
+            {existingVote ? (
+              <div className="flex items-center gap-1.5 text-xs text-muted">
+                <CheckCircle size={14} className="text-green-400" />
+                <span>Voted {
+                  existingVote.account.vote?.voteType === VoteKind.Approve ? "For" :
+                  existingVote.account.vote?.voteType === VoteKind.Deny ? "Against" : "Abstain"
+                }</span>
+              </div>
+            ) : canVote && !inlineResult ? (
+              <>
+                {voting ? (
+                  <div className="flex items-center gap-1.5 text-xs text-muted">
+                    <LoadingSpinner size={12} />
+                    <span>Submitting...</span>
+                  </div>
+                ) : (
+                  <>
+                    <button
+                      onClick={(e) => handleClick(e, "approve")}
+                      className="flex items-center gap-1 rounded-md bg-green-500/15 border border-green-500/20 px-2.5 py-1 text-xs font-medium text-green-400 hover:bg-green-500/25 transition-colors"
+                    >
+                      <ThumbsUp size={12} weight="bold" />
+                      For
+                    </button>
+                    <button
+                      onClick={(e) => handleClick(e, "deny")}
+                      className="flex items-center gap-1 rounded-md bg-red-500/15 border border-red-500/20 px-2.5 py-1 text-xs font-medium text-red-400 hover:bg-red-500/25 transition-colors"
+                    >
+                      <ThumbsDown size={12} weight="bold" />
+                      Against
+                    </button>
+                    <button
+                      onClick={(e) => handleClick(e, "abstain")}
+                      className="flex items-center gap-1 rounded-md bg-gray-500/15 border border-gray-500/20 px-2.5 py-1 text-xs font-medium text-gray-400 hover:bg-gray-500/25 transition-colors"
+                    >
+                      <MinusCircle size={12} weight="bold" />
+                      Abstain
+                    </button>
+                  </>
+                )}
+              </>
+            ) : inlineResult ? (
+              <div className={`flex items-center gap-1.5 text-xs ${inlineResult.success ? "text-green-400" : "text-red-400"}`}>
+                {inlineResult.success ? <CheckCircle size={14} /> : <Warning size={14} />}
+                <span>{inlineResult.message}</span>
+              </div>
+            ) : null}
           </div>
+        )}
+
+        {pendingVote && (
+          <VoteConfirmDialog
+            proposalName={p.name}
+            voteType={pendingVote}
+            onConfirm={confirmVote}
+            onCancel={() => setPendingVote(null)}
+          />
         )}
       </div>
     </Link>
@@ -207,7 +417,6 @@ function ProposalRow({ proposal, realmId }: { proposal: ProposalInfo; realmId: s
 }
 
 function VoteBar({ proposal }: { proposal: import("@solana/spl-governance").Proposal }) {
-  // TODO: fetch actual token decimals
   const yes = proposal.options?.[0]?.voteWeight ? safeToNumber(proposal.options[0].voteWeight) : 0;
   const no = proposal.denyVoteWeight ? safeToNumber(proposal.denyVoteWeight) : 0;
   const total = yes + no;
