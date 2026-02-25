@@ -72,11 +72,13 @@ export default function DashboardPage() {
 
   const loading = connected ? contextLoading : browseLoading;
 
-  // Filter logic
+  // Filter and sort: DAOs with active proposals first
   const filteredDAOs = connected
-    ? userDAOs.filter((d) =>
-        d.realm.account.name.toLowerCase().includes(searchTerm.toLowerCase())
-      )
+    ? userDAOs
+        .filter((d) =>
+          d.realm.account.name.toLowerCase().includes(searchTerm.toLowerCase())
+        )
+        .sort((a, b) => b.activeProposals - a.activeProposals)
     : browseDaos.filter((d) =>
         d.displayName.toLowerCase().includes(searchTerm.toLowerCase())
       );
