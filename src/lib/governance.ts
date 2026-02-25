@@ -6,6 +6,8 @@ import {
   getAllProposals,
   getTokenOwnerRecordsByOwner,
   getVoteRecordsByVoter,
+  getVoteRecordAddress,
+  getVoteRecord,
   getGovernance,
   getProposal,
   getTokenOwnerRecordForRealm,
@@ -305,7 +307,7 @@ const ALLOWED_DESCRIPTION_HOSTS = new Set([
   "shdw-drive.genesysgo.net",
 ]);
 
-// Fetch proposal description content
+// Fetch proposal description content (deny-by-default: only allowlisted hosts)
 export async function fetchProposalDescription(
   descriptionLink: string
 ): Promise<string> {
@@ -322,29 +324,27 @@ export async function fetchProposalDescription(
       url = `https://ipfs.io/ipfs/${url.slice(7)}`;
     }
 
-    // Validate URL and check against allowlist
     const parsed = new URL(url);
-    if (parsed.protocol !== "https:") return descriptionLink;
+    if (parsed.protocol !== "https:") return descriptionLink.slice(0, 5000);
+
+    // Deny-by-default: only fetch from allowlisted hosts
     if (!ALLOWED_DESCRIPTION_HOSTS.has(parsed.hostname)) {
-      // Allow any HTTPS URL but block private/internal IPs
-      if (parsed.hostname === "localhost" || parsed.hostname.startsWith("127.") || parsed.hostname.startsWith("10.") || parsed.hostname.startsWith("192.168.") || parsed.hostname.startsWith("172.") || parsed.hostname === "0.0.0.0") {
-        return descriptionLink;
-      }
+      return descriptionLink.slice(0, 5000);
     }
 
     const res = await fetch(url, { signal: AbortSignal.timeout(5000) });
-    if (!res.ok) return descriptionLink;
+    if (!res.ok) return descriptionLink.slice(0, 5000);
 
     // Only accept text content types
     const contentType = res.headers.get("content-type") || "";
     if (!contentType.includes("text/") && !contentType.includes("application/json") && !contentType.includes("application/octet-stream")) {
-      return descriptionLink;
+      return descriptionLink.slice(0, 5000);
     }
 
     const text = await res.text();
     return text.slice(0, 5000);
   } catch {
-    return descriptionLink;
+    return descriptionLink.slice(0, 5000);
   }
 }
 
@@ -378,5 +378,97 @@ export function getProposalStateColor(state: ProposalState): string {
   }
 }
 
-export { ProposalState };
+// Check if a voter has already voted on a proposal
+export async function getExistingVoteRecord(
+  proposal: PublicKey,
+  tokenOwnerRecord: PublicKey
+): Promise<ProgramAccount<VoteRecord> | null> {
+  const addr = await getVoteRecordAddress(SPL_GOV_PROGRAM_ID, proposal, tokenOwnerRecord);
+  try {
+    return await getVoteRecord(getConnection(), addr);
+  } catch {
+    return null;
+  }
+}
+
+// Map vote type from VoteRecord to human-readable label
+export function getVoteLabel(vote: Vote | undefined): string {
+  if (!vote) return "Unknown";
+  switch (vote.voteType) {
+    case VoteKind.Approve: return "For";
+    case VoteKind.Deny: return "Against";
+    case VoteKind.Abstain: return "Abstain";
+    default: return "Unknown";
+  }
+}
+
+// SPL Governance error messages (from on-chain program)
+const GOVERNANCE_ERRORS: Record<number, string> = {
+  19: "You have already voted on this proposal",
+  20: "Not enough governance tokens to create a proposal",
+  21: "Cannot vote — invalid proposal state",
+  22: "Cannot vote — proposal is not in voting state",
+  31: "Cannot vote on this proposal",
+  36: "Voting period has expired",
+};
+
+// Parse governance transaction errors into human-readable messages
+export function parseVoteError(err: unknown): string {
+  if (!(err instanceof Error)) return "Unknown error";
+  const msg = err.message;
+
+  // Wallet rejection
+  if (msg.includes("User rejected") || msg.includes("Transaction cancelled")) {
+    return "Transaction was rejected in your wallet";
+  }
+
+  // Parse custom program error: "custom program error: 0x13"
+  const hexMatch = msg.match(/custom program error: 0x([0-9a-fA-F]+)/);
+  if (hexMatch) {
+    const code = parseInt(hexMatch[1], 16);
+    if (GOVERNANCE_ERRORS[code]) return GOVERNANCE_ERRORS[code];
+    return `Governance error #${code}`;
+  }
+
+  // Parse decimal error code
+  const decMatch = msg.match(/Custom\((\d+)\)/);
+  if (decMatch) {
+    const code = parseInt(decMatch[1], 10);
+    if (GOVERNANCE_ERRORS[code]) return GOVERNANCE_ERRORS[code];
+    return `Governance error #${code}`;
+  }
+
+  // Insufficient SOL
+  if (msg.includes("insufficient lamports") || msg.includes("Insufficient funds")) {
+    return "Insufficient SOL balance for transaction fees";
+  }
+
+  // Blockhash expired
+  if (msg.includes("Blockhash not found") || msg.includes("block height exceeded")) {
+    return "Transaction expired — please try again";
+  }
+
+  return msg.length > 120 ? msg.slice(0, 120) + "..." : msg;
+}
+
+// Fetch token decimals for a mint (cached)
+const decimalsCache = new Map<string, number>();
+export async function getTokenDecimals(mint: PublicKey): Promise<number> {
+  const key = mint.toBase58();
+  if (decimalsCache.has(key)) return decimalsCache.get(key)!;
+  try {
+    const connection = getConnection();
+    const info = await connection.getParsedAccountInfo(mint);
+    const data = info.value?.data;
+    if (data && typeof data === "object" && "parsed" in data) {
+      const decimals = data.parsed?.info?.decimals ?? 6;
+      decimalsCache.set(key, decimals);
+      return decimals;
+    }
+  } catch { /* fallback */ }
+  decimalsCache.set(key, 6);
+  return 6;
+}
+
+export { ProposalState, VoteKind };
 export type { ProgramAccount, Realm, Proposal, TokenOwnerRecord, VoteRecord, Governance };
