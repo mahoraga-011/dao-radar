@@ -128,9 +128,17 @@ export default function DashboardPage() {
               <p className="text-lg font-medium">No DAOs found</p>
               <p className="text-sm text-muted mt-1 max-w-md">
                 {connected
-                  ? "You don't have governance tokens deposited in any DAOs yet. Explore DAOs to get started."
+                  ? "You don't have governance tokens deposited in any DAOs. To participate in governance, acquire tokens for a DAO and deposit them via Realms."
                   : "Connect your wallet to discover the DAOs where you have voting power."}
               </p>
+              {connected && (
+                <Link
+                  href="/explore"
+                  className="mt-4 rounded-lg bg-accent px-4 py-2 text-sm font-medium text-white hover:bg-accent-hover transition-colors"
+                >
+                  Explore DAOs
+                </Link>
+              )}
             </>
           )}
         </div>
@@ -156,7 +164,7 @@ export default function DashboardPage() {
               className="inline-flex items-center gap-2 text-sm text-muted hover:text-accent transition-colors"
             >
               <Globe size={16} />
-              Explore all 4,262+ DAOs
+              Explore all DAOs
             </Link>
           </div>
         </>
