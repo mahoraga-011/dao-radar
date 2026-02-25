@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 
 const REGISTRY_URL =
-  "https://raw.githubusercontent.com/solana-labs/governance-ui/main/public/realms/mainnet-beta.json";
+  "https://raw.githubusercontent.com/Mythic-Project/governance-ui/master/public/realms/mainnet-beta.json";
 
 // Next.js caches this GET response and revalidates every hour
 export const revalidate = 3600;
