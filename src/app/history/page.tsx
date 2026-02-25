@@ -6,6 +6,7 @@ import Link from "next/link";
 import {
   getUserVoteRecords,
   getProposalDetail,
+  VoteKind,
   type ProgramAccount,
   type VoteRecord,
   type Proposal,
@@ -117,11 +118,16 @@ export default function HistoryPage() {
           </Link>
         </div>
       ) : (
-        <div className="space-y-3">
-          {votes.map((item) => (
-            <VoteHistoryRow key={item.voteRecord.pubkey.toBase58()} item={item} />
-          ))}
-        </div>
+        <>
+          <div className="space-y-3">
+            {votes.map((item) => (
+              <VoteHistoryRow key={item.voteRecord.pubkey.toBase58()} item={item} />
+            ))}
+          </div>
+          {votes.length >= 20 && (
+            <p className="mt-4 text-center text-xs text-muted">Showing 20 most recent votes</p>
+          )}
+        </>
       )}
     </div>
   );
@@ -135,14 +141,13 @@ function VoteHistoryRow({ item }: { item: VoteHistoryItem }) {
   let voteLabel = "Unknown";
 
   if (vote) {
-    const voteKind = vote.voteType;
-    if (voteKind === 0) {
+    if (vote.voteType === VoteKind.Approve) {
       voteIcon = <ThumbsUp size={20} className="text-green-400" />;
       voteLabel = "Approved";
-    } else if (voteKind === 1) {
+    } else if (vote.voteType === VoteKind.Deny) {
       voteIcon = <ThumbsDown size={20} className="text-red-400" />;
       voteLabel = "Denied";
-    } else if (voteKind === 2) {
+    } else if (vote.voteType === VoteKind.Abstain) {
       voteIcon = <MinusCircle size={20} className="text-gray-400" />;
       voteLabel = "Abstained";
     }
