@@ -18,9 +18,41 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "DAO Radar — Solana Governance Dashboard",
+  metadataBase: new URL("https://dao-radar.vercel.app"),
+  title: {
+    default: "DAO Radar — Solana Governance Dashboard",
+    template: "%s | DAO Radar",
+  },
   description:
     "Your governance command center. See all your DAOs, AI-summarized proposals, and vote in one click.",
+  keywords: [
+    "Solana",
+    "DAO",
+    "governance",
+    "voting",
+    "proposals",
+    "SPL Governance",
+    "Realms",
+    "decentralized",
+    "Web3",
+    "crypto",
+  ],
+  authors: [{ name: "DAO Radar" }],
+  creator: "DAO Radar",
+  robots: {
+    index: true,
+    follow: true,
+    googleBot: { index: true, follow: true },
+  },
+  icons: {
+    icon: [
+      { url: "/favicon.svg", type: "image/svg+xml" },
+      { url: "/favicon-32x32.png", sizes: "32x32", type: "image/png" },
+      { url: "/favicon-16x16.png", sizes: "16x16", type: "image/png" },
+    ],
+    apple: [{ url: "/apple-touch-icon.png", sizes: "180x180" }],
+  },
+  manifest: "/site.webmanifest",
   openGraph: {
     title: "DAO Radar — Solana Governance Dashboard",
     description:
@@ -28,13 +60,19 @@ export const metadata: Metadata = {
     type: "website",
     siteName: "DAO Radar",
     url: "https://dao-radar.vercel.app",
-    images: [{ url: "/og-image.png", width: 1200, height: 630, alt: "DAO Radar" }],
+    locale: "en_US",
+    images: [{ url: "/og-image.png", width: 1200, height: 630, alt: "DAO Radar — Solana Governance Dashboard" }],
   },
   twitter: {
     card: "summary_large_image",
     title: "DAO Radar — Solana Governance Dashboard",
     description:
       "Scan every DAO you belong to. AI-powered proposal intelligence. One-click voting across all your Solana DAOs.",
+    images: ["/og-image.png"],
+  },
+  other: {
+    "theme-color": "#ef4444",
+    "msapplication-TileColor": "#0A0A0A",
   },
 };
 
@@ -45,9 +83,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" className="dark">
-      <head>
-        <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
-      </head>
+      <head />
       <body
         className={`${plusJakarta.variable} ${geistMono.variable} antialiased min-h-screen flex flex-col`}
       >
