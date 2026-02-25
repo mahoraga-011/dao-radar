@@ -11,12 +11,15 @@ export type RegistryDAO = {
   programId: string;
 };
 
-// In-memory cache for the client session (avoids refetching on navigation)
+// In-memory cache with 1-hour TTL
 let cache: RegistryDAO[] | null = null;
+let cacheTime = 0;
+let cachedMap: Map<string, RegistryDAO> | null = null;
 let inflight: Promise<RegistryDAO[]> | null = null;
+const CACHE_TTL = 60 * 60 * 1000; // 1 hour
 
 export async function getRegistry(): Promise<RegistryDAO[]> {
-  if (cache) return cache;
+  if (cache && Date.now() - cacheTime < CACHE_TTL) return cache;
   if (inflight) return inflight;
 
   inflight = fetch("/api/registry")
@@ -26,6 +29,8 @@ export async function getRegistry(): Promise<RegistryDAO[]> {
     })
     .then((data) => {
       cache = data;
+      cacheTime = Date.now();
+      cachedMap = null; // invalidate map cache
       return data;
     })
     .finally(() => {
@@ -37,9 +42,11 @@ export async function getRegistry(): Promise<RegistryDAO[]> {
 
 export async function getRegistryMap(): Promise<Map<string, RegistryDAO>> {
   const registry = await getRegistry();
+  if (cachedMap) return cachedMap;
   const map = new Map<string, RegistryDAO>();
   for (const dao of registry) {
     map.set(dao.realmId, dao);
   }
+  cachedMap = map;
   return map;
 }

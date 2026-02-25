@@ -30,14 +30,19 @@ setInterval(() => {
 
 // --- Prompt injection sanitization ---
 function sanitizeInput(text: string): string {
-  // Strip common injection patterns
   return text
+    // Role/instruction injection patterns (case-insensitive, Unicode-aware)
     .replace(/\bignore\s+(all\s+)?previous\s+instructions?\b/gi, "[filtered]")
     .replace(/\byou\s+are\s+now\b/gi, "[filtered]")
     .replace(/\bsystem\s*:\s*/gi, "[filtered]")
     .replace(/\bassistant\s*:\s*/gi, "[filtered]")
-    .replace(/\b(forget|disregard|override)\s+(everything|all|your|the)\b/gi, "[filtered]")
-    .replace(/```[\s\S]*?```/g, (match) => match.slice(0, 500)) // Limit code blocks
+    .replace(/\buser\s*:\s*/gi, "[filtered]")
+    .replace(/\b(forget|disregard|override|bypass)\s+(everything|all|your|the|these|my)\b/gi, "[filtered]")
+    .replace(/\b(new\s+)?instructions?\s*:/gi, "[filtered]")
+    .replace(/\bact\s+as\b/gi, "[filtered]")
+    .replace(/\bdo\s+not\s+summarize\b/gi, "[filtered]")
+    .replace(/\breturn\s+only\b/gi, "[filtered]")
+    .replace(/```[\s\S]*?```/g, (match) => match.slice(0, 500))
     .trim();
 }
 

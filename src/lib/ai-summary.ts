@@ -1,3 +1,12 @@
+// Simple hash for cache keys (avoids collisions from slice-based keys)
+function simpleHash(str: string): string {
+  let hash = 0;
+  for (let i = 0; i < str.length; i++) {
+    hash = ((hash << 5) - hash + str.charCodeAt(i)) | 0;
+  }
+  return hash.toString(36);
+}
+
 // In-memory cache
 const summaryCache = new Map<string, { summary: string; impact: string }>();
 
@@ -5,7 +14,7 @@ export async function summarizeProposal(
   title: string,
   description: string
 ): Promise<{ summary: string; impact: string }> {
-  const cacheKey = `${title}::${description.slice(0, 200)}`;
+  const cacheKey = simpleHash(`${title}::${description}`);
   const cached = summaryCache.get(cacheKey);
   if (cached) return cached;
 
@@ -30,6 +39,7 @@ export async function summarizeProposal(
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ title, description }),
+      signal: AbortSignal.timeout(15000),
     });
 
     if (!res.ok) throw new Error("Failed to summarize");

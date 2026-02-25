@@ -27,24 +27,32 @@ export async function GET() {
 
   const raw: unknown[] = await res.json();
 
+  function str(val: unknown): string {
+    return typeof val === "string" ? val : "";
+  }
+  function optStr(val: unknown): string | undefined {
+    return typeof val === "string" && val.length > 0 ? val : undefined;
+  }
+
   const parsed = raw
     .filter((entry: unknown) => {
+      if (!entry || typeof entry !== "object") return false;
       const e = entry as Record<string, unknown>;
       return typeof e.realmId === "string" && e.realmId.length > 0;
     })
     .map((entry: unknown) => {
       const e = entry as Record<string, unknown>;
       return {
-        realmId: e.realmId as string,
-        symbol: (e.symbol as string) || "",
-        displayName: (e.displayName as string) || (e.symbol as string) || "",
-        ogImage: resolveImageUrl(e.ogImage as string | undefined),
-        category: (e.category as string) || undefined,
-        shortDescription: (e.shortDescription as string) || undefined,
-        website: (e.website as string) || undefined,
-        twitter: (e.twitter as string) || undefined,
-        discord: (e.discord as string) || undefined,
-        programId: (e.programId as string) || "",
+        realmId: str(e.realmId),
+        symbol: str(e.symbol),
+        displayName: str(e.displayName) || str(e.symbol),
+        ogImage: resolveImageUrl(optStr(e.ogImage)),
+        category: optStr(e.category),
+        shortDescription: optStr(e.shortDescription),
+        website: optStr(e.website),
+        twitter: optStr(e.twitter),
+        discord: optStr(e.discord),
+        programId: str(e.programId),
       };
     });
 
